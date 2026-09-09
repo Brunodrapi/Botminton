@@ -9,3 +9,11 @@ html = html.replace(/<script src="(src\/[^"]+)"><\/script>/g, (_, f) => `<script
 mkdirSync('dist', { recursive: true });
 writeFileSync('dist/index.html', html);
 console.log('dist/index.html', (html.length / 1024).toFixed(0) + ' KB');
+
+// Variante « fragment » pour un hébergeur qui fournit lui-même <html>/<head>/<body> (ex. Artifacts claude.ai).
+const head = html.match(/<head>([\s\S]*?)<\/head>/)[1].replace(/<meta name="viewport"[^>]*>\n?/, '').replace(/<link[^>]*>\n?/g, '');
+const body = html.match(/<body>([\s\S]*?)<\/body>/)[1];
+const title = head.match(/<title>[\s\S]*?<\/title>/)[0];
+const fragment = title + '\n' + head.replace(title, '').trim() + '\n' + body.trim() + '\n';
+writeFileSync('dist/rogue-shuttle.html', fragment);
+console.log('dist/rogue-shuttle.html', (fragment.length / 1024).toFixed(0) + ' KB');
