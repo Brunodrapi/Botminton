@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Rogue Shuttle">
+<meta name="theme-color" content="#0b0f1e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>Rogue Shuttle — badminton robots</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="game">
+  <canvas id="c"></canvas>
+
+  <div id="hud" class="hidden">
+    <div class="side you">
+      <div class="name"><span class="serve-dot" id="serveYou"></span>TOI <small id="chassisName"></small></div>
+      <div class="score" id="scoreYou">0</div>
+    </div>
+    <div class="center">
+      <div class="heat-label">HEAT <span id="heatPct">0%</span></div>
+      <div class="heat-bar"><div class="heat-fill" id="heatFill"></div></div>
+      <div class="heat-bar bot"><div class="heat-fill" id="heatFillBot"></div></div>
+    </div>
+    <div class="side bot">
+      <div class="name">BOT <small id="diffName"></small><span class="serve-dot" id="serveBot"></span></div>
+      <div class="score" id="scoreBot">0</div>
+    </div>
+    <button id="pauseBtn" aria-label="Pause">II</button>
+  </div>
+
+  <div id="stickZone" class="hidden">
+    <div id="stickBase"><div id="stickKnob"></div></div>
+  </div>
+
+  <div id="buttons" class="hidden">
+    <button class="btn y" data-shot="drive"><b>Y</b><span>DRIVE</span></button>
+    <button class="btn x" data-shot="smash"><b>X</b><span>SMASH</span></button>
+    <button class="btn b" data-shot="drop"><b>B</b><span>AMORTI</span></button>
+    <button class="btn a" data-shot="clear"><b>A</b><span>DÉGAGÉ</span></button>
+  </div>
+
+  <!-- ---------------------------------------------------------------- menu -->
+  <div id="menu" class="panel">
+    <div class="panel-inner">
+      <h1>🤖🏸 ROGUE SHUTTLE</h1>
+      <p class="tag">Badminton arcade · robots · premier à 15 · prototype sans modules</p>
+
+      <h2>Châssis</h2>
+      <div class="cards" id="chassisCards"></div>
+
+      <h2>Adversaire</h2>
+      <div class="cards small" id="diffCards"></div>
+
+      <label class="toggle"><input type="checkbox" id="assistToggle"> Afficher la zone d'atterrissage (aide)</label>
+
+      <button id="playBtn" class="primary">JOUER</button>
+      <button id="helpBtn" class="ghost">Comment jouer ?</button>
+    </div>
+  </div>
+
+  <div id="help" class="panel hidden">
+    <div class="panel-inner">
+      <h1>Comment jouer</h1>
+      <ul class="help">
+        <li><b>Stick</b> (pouce gauche, n'importe où à gauche) → déplacement. Le stick oriente aussi la frappe à gauche / à droite.</li>
+        <li><b>A</b> dégagé (haut et loin) · <b>B</b> amorti (près du filet) · <b>X</b> smash (il faut le volant haut) · <b>Y</b> drive (tendu et rapide).</li>
+        <li><b>Maintenir</b> un bouton = raquette armée : la frappe part toute seule quand le volant arrive.</li>
+        <li>Qualité = <b>placement + timing</b>. Le point idéal est 35 cm devant le robot (le petit cercle quand tu es armé).
+          <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span></li>
+        <li>Appuyer au dernier moment (moins de 0,45 s avant l'impact) + bien placé = <b>PARFAIT</b>. Armer trop tôt plafonne à OK.</li>
+        <li><b>HEAT</b> : smash +15, drive +5. Amorti −6, dégagé −4. À 100 → <b>OVERHEAT</b> : −30 % de vitesse pendant 3 s.</li>
+        <li>Match : premier à <b>15</b>, deux points d'écart, plafond 20. Service : <b>A</b> long, <b>B</b> court.</li>
+        <li>Clavier : flèches / ZQSD pour bouger, touches <b>A B X Y</b> pour frapper.</li>
+      </ul>
+      <button id="helpBack" class="primary">OK</button>
+    </div>
+  </div>
+
+  <div id="pause" class="panel hidden">
+    <div class="panel-inner">
+      <h1>PAUSE</h1>
+      <button id="resumeBtn" class="primary">Reprendre</button>
+      <button id="quitBtn" class="ghost">Retour au menu</button>
+    </div>
+  </div>
+
+  <div id="end" class="panel hidden">
+    <div class="panel-inner">
+      <h1 id="endTitle">VICTOIRE</h1>
+      <p class="tag" id="endScore">15 – 9</p>
+      <div class="stats" id="endStats"></div>
+      <button id="nextBtn" class="primary">Adversaire suivant</button>
+      <button id="replayBtn" class="ghost">Rejouer</button>
+      <button id="menuBtn" class="ghost">Menu</button>
+    </div>
+  </div>
+</div>
+
+<script src="src/physics.js"></script>
+<script src="src/game.js"></script>
+<script src="src/render.js"></script>
+<script src="src/input.js"></script>
+<script src="src/audio.js"></script>
+<script src="src/main.js"></script>
+</body>
+</html>
