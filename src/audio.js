@@ -53,12 +53,12 @@
       switch (e.type) {
         case 'hit': {
           const lvl = e.level;
-          if (e.shot === 'smash') { this.burst(320, 0.16, 0.9, 0.8); this.tone(140, 0.18, 'triangle', 0.5, 0, 60); }
-          else if (e.shot === 'drive') { this.burst(700, 0.09, 0.6); }
-          else if (e.shot === 'drop') { this.burst(1400, 0.07, 0.35, 2); }
-          else { this.burst(900, 0.1, 0.5); }
-          if (lvl === 2) { this.tone(880, 0.12, 'sine', 0.18, 0.02); this.tone(1320, 0.18, 'sine', 0.18, 0.09); }
-          else if (lvl === 0) { this.tone(160, 0.2, 'sawtooth', 0.12, 0, 90); }
+          if (e.shot === 'smash') { this.burst(500, 0.12, 0.8, 0.6); this.tone(220, 0.16, 'square', 0.25, 0, 70); }
+          else if (e.shot === 'drive') { this.tone(660, 0.07, 'square', 0.18, 0, 440); }
+          else if (e.shot === 'drop') { this.tone(1200, 0.06, 'square', 0.12, 0, 900); }
+          else { this.tone(520, 0.08, 'square', 0.18, 0, 780); }
+          if (lvl === 2) { this.tone(1046, 0.07, 'square', 0.14, 0.03); this.tone(1568, 0.12, 'square', 0.14, 0.1); }
+          else if (lvl === 0) { this.tone(180, 0.18, 'square', 0.12, 0, 90); }
           break;
         }
         case 'point': {

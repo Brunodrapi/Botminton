@@ -108,16 +108,21 @@
 
   /* ---------------------------------------------------------------- HUD */
   let endShown = false;
-  const heatFill = $('heatFill'), heatFillBot = $('heatFillBot'), heatPct = $('heatPct');
+  const heatPct = $('heatPct');
+  const heatBars = { you: $('heatBar'), bot: $('heatBarBot') };
+  for (const k in heatBars) { heatBars[k].innerHTML = ''; for (let i = 0; i < 10; i++) { const d = document.createElement('i'); heatBars[k].appendChild(d); } }
+  function setHeat(bar, heat) {
+    const n = Math.round(heat / 10);
+    for (let i = 0; i < 10; i++) { const seg = bar.children[i]; seg.className = i < n ? (i >= 8 ? 'on hot' : i >= 5 ? 'on warm' : 'on') : ''; }
+  }
   function updateHud() {
     if (game.state === 'menu') return;
     $('scoreYou').textContent = game.score[0];
     $('scoreBot').textContent = game.score[1];
     const p = game.player, b = game.bot;
-    heatFill.style.width = p.heat.toFixed(0) + '%';
-    heatFillBot.style.width = b.heat.toFixed(0) + '%';
+    setHeat(heatBars.you, p.heat); setHeat(heatBars.bot, b.heat);
     heatPct.textContent = p.heat.toFixed(0) + '%';
-    heatFill.parentElement.classList.toggle('overheat', p.overheat > 0);
+    heatBars.you.classList.toggle('overheat', p.overheat > 0);
     $('serveYou').classList.toggle('on', game.server === p);
     $('serveBot').classList.toggle('on', game.server === b);
   }

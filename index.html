@@ -11,6 +11,8 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
 <title>Rogue Shuttle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -24,8 +26,8 @@
     </div>
     <div class="center">
       <div class="heat-label">HEAT <span id="heatPct">0%</span></div>
-      <div class="heat-bar"><div class="heat-fill" id="heatFill"></div></div>
-      <div class="heat-bar bot"><div class="heat-fill" id="heatFillBot"></div></div>
+      <div class="heat-bar" id="heatBar"></div>
+      <div class="heat-bar bot" id="heatBarBot"></div>
     </div>
     <div class="side bot">
       <div class="name">BOT <small id="diffName"></small><span class="serve-dot" id="serveBot"></span></div>
@@ -35,7 +37,7 @@
   </div>
 
   <div id="stickZone" class="hidden">
-    <div id="stickBase"><div id="stickKnob"></div></div>
+    <div id="stickBase"><div class="dpad-h"></div><div class="dpad-v"></div><div id="stickKnob"></div></div>
   </div>
 
   <div id="buttons" class="hidden">
@@ -49,7 +51,7 @@
   <div id="menu" class="panel">
     <div class="panel-inner">
       <h1>🤖🏸 ROGUE SHUTTLE</h1>
-      <p class="tag">Badminton arcade · robots · premier à 15 · prototype sans modules</p>
+      <p class="tag">BADMINTON · ROBOTS · PREMIER À 15</p>
 
       <h2>Châssis</h2>
       <div class="cards" id="chassisCards"></div>
@@ -68,12 +70,12 @@
     <div class="panel-inner">
       <h1>Comment jouer</h1>
       <ul class="help">
-        <li><b>Stick</b> (pouce gauche, n'importe où à gauche) → déplacement. Le stick oriente aussi la frappe à gauche / à droite.</li>
+        <li><b>Croix</b> (pouce gauche, n'importe où à gauche) : 8 directions. Gauche/droite au moment de la frappe oriente le volant.</li>
         <li><b>A</b> dégagé (haut et loin) · <b>B</b> amorti (près du filet) · <b>X</b> smash (il faut le volant haut) · <b>Y</b> drive (tendu et rapide).</li>
-        <li><b>Maintenir</b> un bouton = raquette armée : la frappe part toute seule quand le volant arrive.</li>
-        <li>Qualité = <b>placement + timing</b>. Le point idéal est 35 cm devant le robot (le petit cercle quand tu es armé).
+        <li><b>Appuie tôt et maintiens</b> : le robot court tout seul vers le volant et charge la frappe. Barre pleine = frappe chargée.</li>
+        <li>Qualité = <b>charge + placement</b>. Point idéal 35 cm devant le robot (la petite croix quand tu es armé).
           <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span></li>
-        <li>Appuyer au dernier moment (moins de 0,45 s avant l'impact) + bien placé = <b>PARFAIT</b>. Armer trop tôt plafonne à OK.</li>
+        <li>Appuyer au dernier moment = frappe <b>précipitée</b> (OK maxi). Mal placé = <b>faible</b>, et parfois faute.</li>
         <li><b>HEAT</b> : smash +15, drive +5. Amorti −6, dégagé −4. À 100 → <b>OVERHEAT</b> : −30 % de vitesse pendant 3 s.</li>
         <li>Match : premier à <b>15</b>, deux points d'écart, plafond 20. Service : <b>A</b> long, <b>B</b> court.</li>
         <li>Clavier : flèches / ZQSD pour bouger, touches <b>A B X Y</b> pour frapper.</li>

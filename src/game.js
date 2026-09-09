@@ -5,18 +5,18 @@
   const COURT = P.COURT;
 
   const CHASSIS = {
-    light:    { key: 'light',    name: 'LIGHT',    speed: 7.0, accel: 34, smash: 0.85, heatMul: 1.35, cool: 5.0, reach: 1.10, color: '#5ef2ff', accent: '#b8fbff',
+    light:    { key: 'light',    name: 'LIGHT',    speed: 7.6, accel: 80, smash: 0.85, heatMul: 1.35, cool: 5.0, reach: 1.20, color: '#5ef2ff', accent: '#b8fbff',
                 desc: ['🟢 rapide', '🔴 chauffe vite', '🔴 smash faible'] },
-    balanced: { key: 'balanced', name: 'BALANCED', speed: 5.9, accel: 26, smash: 1.0,  heatMul: 1.0,  cool: 6.5, reach: 1.15, color: '#7dff9a', accent: '#d6ffe0',
+    balanced: { key: 'balanced', name: 'BALANCED', speed: 6.4, accel: 70, smash: 1.0,  heatMul: 1.0,  cool: 6.5, reach: 1.25, color: '#7dff9a', accent: '#d6ffe0',
                 desc: ['⚪ tout moyen'] },
-    heavy:    { key: 'heavy',    name: 'HEAVY',    speed: 4.9, accel: 19, smash: 1.25, heatMul: 0.75, cool: 9.0, reach: 1.25, color: '#ffb35e', accent: '#ffe0b8',
+    heavy:    { key: 'heavy',    name: 'HEAVY',    speed: 5.4, accel: 55, smash: 1.25, heatMul: 0.75, cool: 9.0, reach: 1.35, color: '#ffb35e', accent: '#ffe0b8',
                 desc: ['🟢 énorme smash', '🟢 refroidissement', '🔴 lent'] },
   };
 
   const DIFFICULTY = {
-    rookie: { key: 'rookie', name: 'ROOKIE', speed: 4.4, reaction: 0.42, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#ff7a5e' },
-    pro:    { key: 'pro',    name: 'PRO',    speed: 5.5, reaction: 0.26, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a' },
-    elite:  { key: 'elite',  name: 'ELITE',  speed: 6.3, reaction: 0.15, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#d05eff' },
+    rookie: { key: 'rookie', name: 'ROOKIE', speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#ff7a5e' },
+    pro:    { key: 'pro',    name: 'PRO',    speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a' },
+    elite:  { key: 'elite',  name: 'ELITE',  speed: 6.9, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#d05eff' },
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite'];
 
@@ -25,6 +25,7 @@
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
+  const CHARGE_TIME = 0.3;     // maintenir le bouton au moins 0,3 s avant l'impact = frappe chargée
   const MAX_HEAT = 100;
   const OVERHEAT_TIME = 3.0;
 
@@ -52,6 +53,7 @@
       this.message = null;
       this.shuttle = { x: 0, y: 1, z: -3, vx: 0, vy: 0, vz: 0, t: 0, px: 0, py: 1, pz: -3, trail: [] };
       this.shake = 0;
+      this.hitStop = 0;
       this.robots = [];
       this.score = [0, 0];
     }
@@ -96,12 +98,13 @@
       this.rallyHits = 0;
       this.state = 'serve';
       this.serveTimer = srv.isAI ? rnd(0.9, 1.5) : 0;
-      this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A = long  ·  B = court', t: 0 };
+      this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A LONG  B COURT', t: 0 };
     }
 
     /* ------------------------------------------------------------------ update */
     update(dt, input) {
       if (this.state === 'menu' || this.state === 'paused' || this.state === 'end') return;
+      if (this.hitStop > 0) { this.hitStop -= dt; return; }
       this.time += dt;
       this.matchTime += dt;
       if (this.message) this.message.t += dt;
@@ -151,18 +154,57 @@
 
     updatePlayerInput(input) {
       const p = this.player;
-      p.moveX = input.stick.x;
-      p.moveZ = input.stick.y;       // stick vers le haut = vers le filet (+z pour le joueur)
-      p.aimX = Math.abs(input.stick.x) > 0.25 ? input.stick.x : 0;
-      if (this.state !== 'rally') { p.armed = null; return; }
+      // Croix 8 directions façon Game Boy : vitesse pleine, direction quantifiée à 45°.
+      let mx = 0, mz = 0;
+      const mag = Math.hypot(input.stick.x, input.stick.y);
+      if (mag > 0.2) {
+        const a = Math.round(Math.atan2(input.stick.y, input.stick.x) / (Math.PI / 4)) * (Math.PI / 4);
+        mx = Math.cos(a); mz = Math.sin(a);
+        if (Math.abs(mx) < 1e-6) mx = 0;
+        if (Math.abs(mz) < 1e-6) mz = 0;
+      }
+      p.aimX = mx;
+      if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
       for (const shot of input.just) p.armed = { shot, t0: this.time, lastD: null };
       if (p.armed && !input.held[p.armed.shot]) p.armed = null;
+      // Auto-course : bouton maintenu = le robot file tout seul vers le volant (Mario Tennis).
+      if (p.armed && this.lastHitter !== p && this.pred) {
+        const t = this.interceptFor(p);
+        if (t) {
+          const dx = t.x - p.x, dz = t.z + p.side * SWEET - p.z;
+          const d = Math.hypot(dx, dz);
+          if (d > 0.08) {
+            const k = Math.min(1, d / 0.3);
+            const w = mag > 0.2 ? 0.35 : 0.85;
+            mx = mx * (mag > 0.2 ? 1 : 0) + dx / d * k * w;
+            mz = mz * (mag > 0.2 ? 1 : 0) + dz / d * k * w;
+          }
+        }
+      }
+      p.moveX = mx; p.moveZ = mz;
+    }
+
+    /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
+    interceptFor(r) {
+      const s = this.shuttle, side = r.side;
+      const speed = r.isAI ? this.diff.speed : r.chassis.speed;
+      let best = null, fallback = null;
+      for (const p of this.pred.path) {
+        if (p.t <= s.t) continue;
+        if (p.z * side < 0.35) continue;
+        if (p.y > 2.3 || p.y < 0.15) continue;
+        if (p.vy > 0 && p.y > 0.9) continue;
+        const dist = Math.hypot(p.x - r.x, p.z + side * SWEET - r.z);
+        if (dist / speed <= (p.t - s.t) + 0.03) { best = p; break; }
+        fallback = p;
+      }
+      return best || fallback;
     }
 
     moveRobot(r, dt) {
       let maxS = r.isAI ? this.diff.speed : r.chassis.speed;
       if (r.overheat > 0) maxS *= 0.7;
-      const accel = r.isAI ? 30 : r.chassis.accel;
+      const accel = r.isAI ? 60 : r.chassis.accel;
       let mx = r.moveX, mz = r.moveZ;
       const m = Math.hypot(mx, mz);
       if (m > 1) { mx /= m; mz /= m; }
@@ -234,7 +276,7 @@
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const inReach = dr <= r.chassis.reach && s.y <= 2.6 && s.y > 0.02;
+        const inReach = dr <= r.chassis.reach && s.y <= 2.6 && s.y > 0.12;
         if (!inReach) { r.armed.lastD = null; continue; }
         const a = r.armed;
         const closest = a.lastD !== null && d >= a.lastD;
@@ -249,9 +291,9 @@
       const s = this.shuttle;
       const a = r.armed; r.armed = null;
       const hold = this.time - a.t0;
-      const place = d <= 0.45 ? 2 : d <= 0.9 ? 1 : 0;
-      const timing = hold <= 0.45 ? 2 : 1;
-      let level = Math.min(place, timing);
+      const place = d <= 0.6 ? 2 : d <= 1.05 ? 1 : 0;
+      const charged = hold >= CHARGE_TIME;
+      let level = Math.min(place, charged ? 2 : 1);
       if (r.isAI) level = this.aiLevel(level);
 
       let shot = a.shot;
@@ -272,12 +314,12 @@
       r.swing = 0.3; r.swingShot = shot; r.swingLevel = level;
       r.stats.hits++;
       if (level === 2) r.stats.perfect++;
-      if (shot === 'smash') { r.stats.smashes++; this.addHeat(r, level === 0 ? 8 : 15); if (level === 2) this.shake = Math.max(this.shake, 0.22); }
+      if (shot === 'smash') { r.stats.smashes++; this.addHeat(r, level === 0 ? 8 : 15); if (level === 2) { this.shake = Math.max(this.shake, 0.22); this.hitStop = 0.07; } }
       else if (shot === 'drive') this.addHeat(r, 5);
       else if (shot === 'drop') this.addHeat(r, -6);
       else if (shot === 'clear') this.addHeat(r, -4);
 
-      const label = note || (SHOT_NAMES[shot] + (level === 2 ? ' PARFAIT' : level === 0 ? ' FAIBLE' : ''));
+      const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : (!charged && place === 2 ? 'PRÉCIPITÉ' : SHOT_NAMES[shot]));
       this.addFx(label, s.x, s.y + 0.3, s.z, LEVEL_COLORS[level], r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
       this.events.push({ type: 'hit', shot, level, robot: r });
       this.onHitFor(this.other(r));
@@ -307,7 +349,7 @@
           break;
         }
         case 'drop': {
-          const tz = [2.7, 1.6, 0.95][level];
+          const tz = [2.7, 1.5, 0.75][level];
           const overhead = y > COURT.netHeight + 0.15;
           const angle = level === 0 ? 30 : overhead ? -8 : 30;
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: [0.55, 0.28, 0.12][level] };
@@ -317,8 +359,8 @@
           if (level === 0) {
             spec = { mode: 'angle', angle: 18, target: { x: tx, z: far * 4.8 }, clearance: 0.45 };
           } else {
-            let speed = (level === 2 ? 24 : 20) * r.chassis.smash;
-            spec = { mode: 'speed', speed, target: { x: tx, z: far * (level === 2 ? 3.8 : 4.6) }, clearance: level === 2 ? 0.12 : 0.3 };
+            let speed = (level === 2 ? 27 : 22) * r.chassis.smash;
+            spec = { mode: 'speed', speed, target: { x: tx, z: far * (level === 2 ? 3.3 : 4.3) }, clearance: level === 2 ? 0.1 : 0.3 };
           }
           break;
         }
@@ -340,7 +382,9 @@
     onHitFor(r) {
       if (!r.isAI) return;
       const d = this.diff;
-      r.ai.reactAt = this.time + d.reaction * rnd(0.8, 1.25);
+      const sp = Math.hypot(this.shuttle.vx, this.shuttle.vy, this.shuttle.vz);
+      // un smash surprend : réaction plus lente
+      r.ai.reactAt = this.time + d.reaction * rnd(0.8, 1.25) * (sp > 16 ? 1.4 : 1);
       r.ai.shot = null;
       r.ai.noiseX = rnd(-1, 1) * d.posNoise;
       const out = this.pred && !this.pred.net && !P.inSingles(this.pred.landing.x, this.pred.landing.z, -0.1);
@@ -357,27 +401,13 @@
       const incoming = this.state === 'rally' && this.lastHitter !== ai && this.pred;
 
       if (incoming && this.time >= ai.ai.reactAt && !ai.ai.judgedOut) {
-        const path = this.pred.path;
-        const now = s.t;
-        let best = null, fallback = null;
-        for (const p of path) {
-          if (p.t <= now) continue;
-          if (p.z * side < 0.35) continue;
-          if (p.y > 2.3 || p.y < 0.15) continue;
-          if (p.vy > 0 && p.y > 0.9) continue;
-          const rz = p.z + side * SWEET;
-          const dist = Math.hypot(p.x - ai.x, rz - ai.z);
-          const travel = dist / this.diff.speed;
-          if (travel <= (p.t - now) + 0.03) { best = p; break; }
-          fallback = p;
-        }
-        const target = best || fallback;
+        const target = this.interceptFor(ai);
         if (target) {
           tx = target.x + ai.ai.noiseX;
           tz = target.z + side * SWEET;
           if (!ai.ai.shot) ai.ai.shot = this.aiChooseShot(ai, target);
           const dToSweet = Math.hypot(s.x - ai.x, s.z - (ai.z - side * SWEET));
-          if (!ai.armed && s.z * side > -0.3 && dToSweet < 1.7) ai.armed = { shot: ai.ai.shot, t0: this.time, lastD: null };
+          if (!ai.armed && s.z * side > -0.3 && dToSweet < 3.2) ai.armed = { shot: ai.ai.shot, t0: this.time, lastD: null };
         }
       } else {
         // repli : légèrement du côté où se trouve le volant
@@ -481,5 +511,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, CHARGE_TIME };
 })(typeof window !== 'undefined' ? window : globalThis);
