@@ -23,7 +23,7 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 | **B** (neutre) | Dégagé mi-court |
 | **B + croix vers le bas** | Dégagé court et tendu, il tombe devant |
 | **B + croix vers le haut** | Dégagé long, au fond de court |
-| Charger | Ralentit le robot à 45 % de sa vitesse |
+| Frapper ou charger | Immobilise le robot : la croix ne sert plus qu'à viser |
 | A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |

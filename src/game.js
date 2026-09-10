@@ -32,6 +32,7 @@
   const SWING_TIME = 0.30;
   const SWING_HIT0 = 0.04;
   const SWING_HIT1 = 0.20;
+  const SWING_PLANT = 0.10;   // le temps où le robot est planté sur ses appuis pendant le geste
   const JUMP_REACH = 3.3;      // hauteur max atteignable en sautant pour smasher
   const JUMP_TIME = 0.45;
   // Plongeon (sauvetage) : détente rapide avec allonge, puis un temps au sol avant de se relever.
@@ -220,11 +221,18 @@
           this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, dirZ: mz });
         }
       }
-      // Charger alourdit le robot sans le clouer sur place : c'est le prix du smash.
-      if (p.hold && this.time - p.hold.t0 >= TAP_TIME) { p.moveX *= 0.45; p.moveZ *= 0.45; }
+      // Frapper ou charger cloue le robot sur place : c'est ce qui rend la visée à la croix précise.
+      if (this.isCommitted(p)) { p.moveX = 0; p.moveZ = 0; }
     }
 
     /** Traduit bouton + croix en type de frappe (le smash est traité à part, par la charge). */
+    /** Le robot est engagé dans un coup : il tient un bouton ou son geste n'a pas fini sa fenêtre de contact. */
+    isCommitted(r) {
+      if (r.dive) return false;
+      if (r.hold) return true;
+      return !!(r.act && !r.act.dive && this.time - r.act.t0 <= SWING_PLANT);
+    }
+
     /** Profondeur visée : 0 court, 1 mi-court, 2 fond. Les diagonales comptent (croix quantifiée : ±0,71). */
     depthOf(dirZ) { return dirZ < -0.5 ? 0 : dirZ > 0.5 ? 2 : 1; }
 
@@ -487,7 +495,7 @@
       switch (shot) {
         case 'clear': {   // croix neutre : dégagé mi-court ; croix haut : dégagé au fond
           const deep = depth >= 2;
-          const tz = (deep ? [4.8, 5.8, 6.35] : [4.0, 4.7, 5.2])[level];
+          const tz = (deep ? [5.3, 6.0, 6.45] : [4.0, 4.7, 5.2])[level];
           const angle = level === 0 ? 60 : (deep ? (y > 1.6 ? 42 : 50) : (y > 1.6 ? 38 : 46));
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 1.2 : 0.7 };
           break;
@@ -517,7 +525,7 @@
         }
         default: {        // drive — croix neutre : mi-court ; croix haut : jusqu'au fond
           const deep = depth >= 2;
-          const tz = (deep ? [4.5, 5.4, 6.0] : [3.4, 4.2, 4.8])[level];
+          const tz = (deep ? [4.8, 5.6, 6.1] : [3.4, 4.2, 4.8])[level];
           const angle = level === 0 ? 32 : (y > 1.4 ? (deep ? 6 : 2) : (deep ? 18 : 12));
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: [0.6, 0.3, 0.15][level] };
         }
@@ -586,6 +594,7 @@
         if (ai.act && !incoming && !ai.act.dive) ai.act = null;
       }
 
+      if (this.isCommitted(ai)) { ai.moveX = ai.moveZ = 0; return; }   // même contrainte que le joueur
       const dx = tx - ai.x, dz = tz - ai.z;
       const dist = Math.hypot(dx, dz);
       if (dist < 0.05) { ai.moveX = ai.moveZ = 0; }
