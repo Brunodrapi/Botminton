@@ -15,7 +15,7 @@
 
   const DIFFICULTY = {
     rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#f2c230', sheet: 'bw-01', tint: false, dive: 0.25 },
-    pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a', sheet: 'rg-b1', tint: true, dive: 0.5 },
+    pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#f2622a', sheet: 'rg-02', tint: false, dive: 0.5 },
     elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 7.6, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#4a9cf0', sheet: 'rg-03', tint: false, hover: true, dive: 0.75 },
     boss:   { key: 'boss',   name: 'BOSS',   tempo: 1.12, speed: 7.8, reaction: 0.11, aggression: 0.9,  errorRate: 0.05, aimNoise: 0.22, posNoise: 0.08, judge: 0.98, chassis: 'heavy', color: '#a052ff', sheet: 'zg-04', tint: false, hover: true, reach: 1.65, dive: 0.9 },
   };

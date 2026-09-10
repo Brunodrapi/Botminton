@@ -14,6 +14,7 @@ FACTOR = 5.75        # réduction commune à toutes les planches (RG-B1 de face 
 SHEETS = {
     'rg-b1': dict(src='assets/rg-b1-sheet.png', rows=[(178, 392, 0, 1536), (478, 712, 0, 1536), (786, 965, 0, 870)], obj=(884, 770, 1150, 965)),
     'bw-01': dict(src='assets/bw-01-sheet.png', rows=[(172, 352, 0, 1536), (452, 662, 0, 1536), (742, 915, 0, 870)], obj=(884, 710, 1140, 918)),
+    'rg-02': dict(src='assets/rg-02-sheet.png', rows=[(174, 375, 0, 1536), (468, 685, 0, 1536), (760, 940, 0, 870)], obj=(884, 735, 1140, 940)),
     'rg-03': dict(src='assets/rg-03-sheet.png', rows=[(174, 372, 0, 1536), (470, 690, 0, 1536), (762, 935, 0, 870)], obj=(884, 735, 1140, 935)),
     'zg-04': dict(src='assets/zg-04-sheet.png', rows=[(174, 376, 0, 1536), (468, 685, 0, 1536), (758, 935, 0, 870)], obj=(884, 730, 1140, 935)),
 }
@@ -28,13 +29,21 @@ H = W = 0
 
 def bg_mask(cell):
     """Pixels de fond : proches du crème local, ou gris clair (ombre au sol)."""
-    r, g, b = cell[..., 0], cell[..., 1], cell[..., 2]
     sat = cell.max(axis=2) - cell.min(axis=2)
     lum = cell.mean(axis=2)
-    # crème du fond (avec vignettage) : clair, légèrement jaune, peu saturé
-    near = (r >= 178) & (g >= 178) & (b >= 155) & (r - b >= 4) & (r - b <= 48) & (sat < 48)
-    greyish = (sat < 22) & (lum > 125) & (lum < 205)   # ombre portée au sol
-    return near | greyish
+    # L'ombre portée est un gris neutre, mais la carrosserie d'un robot clair aussi :
+    # on ne retire ce gris que dans la bande basse de la cellule, où se trouve le sol.
+    ground = np.zeros(cell.shape[:2], dtype=bool)
+    ground[int(cell.shape[0] * 0.85):] = True
+    greyish = ground & (sat < 22) & (lum > 125) & (lum < 205)
+    return cream_mask(cell) | greyish
+
+def cream_mask(cell):
+    """Crème du fond (avec vignettage) : clair, légèrement jaune, peu saturé.
+    Volontairement distinct du gris neutre, qui peut être la carrosserie d'un robot clair."""
+    r, g, b = cell[..., 0], cell[..., 1], cell[..., 2]
+    sat = cell.max(axis=2) - cell.min(axis=2)
+    return (r >= 178) & (g >= 178) & (b >= 155) & (r - b >= 4) & (r - b <= 48) & (sat < 48)
 
 def flood_outside(mask):
     h, w = mask.shape
@@ -59,13 +68,40 @@ def dilate(m, n):
         out = out | np.roll(out, 1, 0) | np.roll(out, -1, 0) | np.roll(out, 1, 1) | np.roll(out, -1, 1)
     return out
 
+MAX_HOLE = 250   # au-dela de cette taille, un trou est examine de plus pres
+
 def sprite_mask(cell):
-    """Contours fermés par dilatation avant le remplissage : l'intérieur des raquettes (couleur du fond) reste."""
+    """Contours fermés par dilatation avant le remplissage : l'intérieur des raquettes (couleur du fond) reste.
+    Les trous trop grands (vide entre les jambes, ombre au sol enfermée) sont rendus au fond."""
     fg0 = ~bg_mask(cell)
     fgd = dilate(fg0, 2)
     fgd[0, :] = fgd[-1, :] = False; fgd[:, 0] = fgd[:, -1] = False
     outside = flood_outside(~fgd)
     outside = dilate(outside, 2) & ~fg0
+    holes = ~outside & ~fg0
+    cream = cream_mask(cell)
+    lum = cell.mean(axis=2)
+    h, w = holes.shape
+    seen = np.zeros_like(holes, dtype=bool)
+    for y in range(h):
+        for x in range(w):
+            if not holes[y, x] or seen[y, x]: continue
+            q = deque([(y, x)]); seen[y, x] = True; pts = [(y, x)]
+            while q:
+                cy, cx = q.popleft()
+                for ny, nx in ((cy - 1, cx), (cy + 1, cx), (cy, cx - 1), (cy, cx + 1)):
+                    if 0 <= ny < h and 0 <= nx < w and holes[ny, nx] and not seen[ny, nx]:
+                        seen[ny, nx] = True; q.append((ny, nx)); pts.append((ny, nx))
+            # Grand trou crème : cordage de raquette (bordé par un cadre clair) ou vide entre les jambes
+            # (bordé par le contour sombre du robot). C'est la bordure qui tranche.
+            if len(pts) <= MAX_HOLE: continue
+            if sum(1 for py, px_ in pts if cream[py, px_]) <= 0.6 * len(pts): continue
+            edge = []
+            for py, px_ in pts:
+                for ny, nx in ((py - 1, px_), (py + 1, px_), (py, px_ - 1), (py, px_ + 1)):
+                    if 0 <= ny < h and 0 <= nx < w and fg0[ny, nx]: edge.append(lum[ny, nx])
+            if edge and np.mean(edge) > 150: continue          # cadre clair : c'est une raquette, on garde
+            for py, px_ in pts: outside[py, px_] = True
     return ~outside
 
 def largest_component(fg):

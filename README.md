@@ -43,7 +43,7 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 - `src/physics.js` — intégrateur du volant + solveur de trajectoire (`planShot` : « atterrir là, avec cet angle ou cette vitesse, en passant le filet »).
 - `src/game.js` — robots, contact/qualité, spécification des frappes, IA, score, Heat.
 - `src/render.js` — pixel art façon Game Boy : tampon 192 px de large, fausse perspective, sprites de l'atlas, police pixel.
-- `src/sprites.js` — atlas embarqués RG-B1 (héros), BW-01 (bot Rookie) et RG-03 (bot Elite), générés par `tools/extract_sprites.py` depuis `assets/*-sheet.png`.
+- `src/sprites.js` — atlas embarqués : RG-B1 (héros), BW-01 (Rookie), RG-02 (Pro), RG-03 (Elite), ZG-04 (Boss), générés par `tools/extract_sprites.py` depuis `assets/*-sheet.png`.
 - `src/input.js` — croix directionnelle fixe 8 directions, boutons A/B (Pointer Events), clavier.
 - `src/audio.js` — sons synthétiques WebAudio.
 - `src/main.js` — menus, HUD, boucle.
