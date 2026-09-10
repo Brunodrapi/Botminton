@@ -57,32 +57,44 @@ button { font-family: inherit; }
   border: 2px solid var(--paper); background: var(--ink); color: var(--paper); font-size: 8px; padding: 0;
 }
 
-/* ------------------------------------------------------------------ pad */
-#stickZone { position: absolute; left: 0; top: calc(var(--sat) + 90px); width: 52%; bottom: 0; }
-#stickBase { display: none; position: fixed; width: 120px; height: 120px; pointer-events: none; }
-.dpad-h, .dpad-v { position: absolute; background: rgba(240,230,200,0.14); border: 2px solid rgba(240,230,200,0.35); }
-.dpad-h { left: 0; top: 40px; width: 120px; height: 40px; }
-.dpad-v { left: 40px; top: 0; width: 40px; height: 120px; }
-#stickKnob { position: absolute; left: 42px; top: 42px; width: 36px; height: 36px; background: var(--cyan); border: 3px solid var(--ink); box-shadow: 0 0 0 2px var(--paper); }
+/* ------------------------------------------------------------------ pad façon Game Boy */
+#pad { position: absolute; left: var(--sal); right: var(--sar); bottom: 0; height: 224px; padding-bottom: var(--sab); }
+#dpadZone { position: absolute; left: 0; top: 0; bottom: 0; width: 52%; touch-action: none; }
+#dpad { position: absolute; left: 20px; bottom: calc(var(--sab) + 26px); width: 150px; height: 150px; pointer-events: none; }
+#dpad .arm { position: absolute; background: #2c2c30; border: 3px solid #101014; box-shadow: 0 4px 0 #101014; }
+#dpad .arm.v { left: 50px; top: 0; width: 50px; height: 150px; }
+#dpad .arm.h { left: 0; top: 50px; width: 150px; height: 50px; }
+#dpad .hub { position: absolute; left: 60px; top: 60px; width: 30px; height: 30px; border-radius: 50%; background: #202024; box-shadow: inset 0 2px 0 #38383c; }
+#dpad .tri { position: absolute; width: 0; height: 0; border: 9px solid transparent; opacity: 0.55; }
+#dpad .tri.up { left: 66px; top: 12px; border-bottom-color: #8a8a90; border-top: 0; }
+#dpad .tri.down { left: 66px; bottom: 12px; border-top-color: #8a8a90; border-bottom: 0; }
+#dpad .tri.left { left: 12px; top: 66px; border-right-color: #8a8a90; border-left: 0; }
+#dpad .tri.right { right: 12px; top: 66px; border-left-color: #8a8a90; border-right: 0; }
+#dpad.up .tri.up { border-bottom-color: var(--cyan); opacity: 1; }
+#dpad.down .tri.down { border-top-color: var(--cyan); opacity: 1; }
+#dpad.left .tri.left { border-right-color: var(--cyan); opacity: 1; }
+#dpad.right .tri.right { border-left-color: var(--cyan); opacity: 1; }
+#dpad.up .arm.v, #dpad.down .arm.v, #dpad.left .arm.h, #dpad.right .arm.h { background: #3a3a40; }
 
-#buttons {
-  position: absolute; right: calc(var(--sar) + 8px); bottom: calc(var(--sab) + 14px);
-  display: grid; grid-template-columns: repeat(3, 66px); grid-template-rows: repeat(3, 66px); gap: 2px;
-}
+#buttons { position: absolute; right: 14px; bottom: calc(var(--sab) + 34px); width: 200px; height: 160px; }
+.btn-wrap { position: absolute; width: 84px; text-align: center; }
+.btn-wrap.b { left: 0; bottom: 0; }
+.btn-wrap.a { right: 0; top: 0; }
 .btn {
-  width: 66px; height: 66px; border-radius: 50%; border: 3px solid var(--ink);
-  background: var(--paper); color: var(--ink); display: flex; flex-direction: column; align-items: center; justify-content: center;
-  padding: 0; -webkit-tap-highlight-color: transparent; touch-action: none; box-shadow: 0 4px 0 var(--ink);
+  width: 84px; height: 84px; border-radius: 50%; border: 3px solid #4a1030; padding: 0;
+  background: radial-gradient(circle at 40% 35%, #b4487c, #8a2c5a 70%); box-shadow: 0 5px 0 #4a1030, inset 0 -4px 0 rgba(0,0,0,0.2);
+  -webkit-tap-highlight-color: transparent; touch-action: none; display: block;
 }
-.btn b { font-size: 18px; line-height: 1; font-weight: normal; }
-.btn span { font-size: 6px; margin-top: 5px; }
-.btn.y { background: #f8d060; } .btn.x { background: #f87070; } .btn.b { background: #b8f070; } .btn.a { background: #78d0f8; }
-.btn.y { grid-column: 2; grid-row: 1; } .btn.x { grid-column: 1; grid-row: 2; } .btn.b { grid-column: 3; grid-row: 2; } .btn.a { grid-column: 2; grid-row: 3; }
-.btn.active { transform: translateY(4px); box-shadow: 0 0 0 var(--ink); filter: brightness(1.15); }
+.btn.active { transform: translateY(5px); box-shadow: 0 0 0 #4a1030, inset 0 -4px 0 rgba(0,0,0,0.2); filter: brightness(1.15); }
+.btn-wrap span { display: block; font-size: 14px; color: #2a4a9a; margin-top: 4px; font-style: italic; }
+.btn-wrap small { display: block; font-size: 6px; color: var(--muted); line-height: 1.6; }
 
 @media (orientation: landscape) {
-  #stickZone { width: 45%; }
-  #buttons { bottom: calc(var(--sab) + 10px); }
+  #pad { height: 100%; top: calc(var(--sat) + 90px); pointer-events: none; }
+  #dpadZone, #buttons { pointer-events: auto; }
+  #dpadZone { width: 35%; }
+  #dpad { bottom: calc(var(--sab) + 12px); }
+  #buttons { bottom: calc(var(--sab) + 16px); }
 }
 
 /* ------------------------------------------------------------------ panels : boîtes de dialogue Game Boy */

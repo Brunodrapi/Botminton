@@ -9,7 +9,7 @@
   const game = new RS.Game();
   const sfx = new window.Sfx();
   const input = new window.Input({
-    stickZone: $('stickZone'), stickBase: $('stickBase'), stickKnob: $('stickKnob'),
+    dpad: $('dpad'), dpadZone: $('dpadZone'),
     buttons: document.querySelectorAll('#buttons .btn'),
     onAny: () => sfx.unlock(),
   });
@@ -54,8 +54,7 @@
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
     $('hud').classList.toggle('hidden', name === 'menu' || name === 'help');
-    $('stickZone').classList.toggle('hidden', !playing);
-    $('buttons').classList.toggle('hidden', !playing);
+    $('pad').classList.toggle('hidden', !playing);
     layout();
   }
 
@@ -99,7 +98,7 @@
     const top = ($('hud').classList.contains('hidden') ? 0 : hud.bottom) + 2;
     let bottom = h - 8;
     const portrait = h > w;
-    if (portrait && !$('buttons').classList.contains('hidden')) bottom = $('buttons').getBoundingClientRect().top - 6;
+    if (portrait && !$('pad').classList.contains('hidden')) bottom = Math.min($('dpad').getBoundingClientRect().top, $('buttons').getBoundingClientRect().top) - 6;
     else if (portrait) bottom = h - 220;
     renderer.resize(w, h, { top, bottom });
   }

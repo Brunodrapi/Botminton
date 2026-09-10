@@ -31,14 +31,14 @@ await page.click('#playBtn');
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/2-serve.png` });
 // service long puis on laisse l'échange se dérouler avec un joueur scripté
-await page.keyboard.press('a');
+await page.keyboard.press('b');
 await page.evaluate(() => {
   const { game, input } = window.__rogueShuttle;
   const RS = window.RogueShuttle;
   // joueur scripté : injecte un stick + frappes via les touches virtuelles
   setInterval(() => {
     const p = game.player, s = game.shuttle;
-    if (game.state === 'serve' && game.server === p) { input.just.push('clear'); return; }
+    if (game.state === 'serve' && game.server === p) { input.just.push('B'); return; }
     input.keys = {};
     if (game.state !== 'rally' || game.lastHitter === p || !game.pred) return;
     let t = null;
@@ -47,7 +47,7 @@ await page.evaluate(() => {
     const dx = t.x - p.x, dz = t.z - RS.SWEET - p.z;
     input.keys = { arrowright: dx > 0.1, arrowleft: dx < -0.1, arrowup: dz > 0.1, arrowdown: dz < -0.1 };
     const near = Math.hypot(s.x - p.x, s.z - (p.z + RS.SWEET)) < 1.6 && s.z < 0.3;
-    if (near && !p.armed) { const shot = s.y > 1.9 ? 'smash' : s.y > 1.1 ? 'drive' : 'clear'; input.just.push(shot); input.held[shot] = true; }
+    if (near && !p.armed) { const btn = s.y > 1.1 ? 'A' : 'B'; input.just.push(btn); input.held[btn] = true; }
     if (!near) for (const k in input.held) input.held[k] = false;
   }, 33);
 });

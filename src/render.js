@@ -21,56 +21,64 @@
 
   /* ------------------------------------------------------------------ sprites */
   const HEAD_BACK = [
-    '....kkkkkk....',
-    '...kllllllk...',
-    '...kggggggk...',
-    '...kgggggkk...',
-    '...kkkkkkkk...',
+    '.....kkkkkk.....',
+    '....kllllllk....',
+    '....kggggggk....',
+    '....kggggggk....',
+    '....kggggggk....',
+    '....kkkkkkkk....',
+    '......kddk......',
   ];
   const HEAD_FRONT = [
-    '....kkkkkk....',
-    '...kggggggk...',
-    '...kvvvvvvk...',
-    '...kggggggk...',
-    '...kkkkkkkk...',
+    '.....kkkkkk.....',
+    '....kggggggk....',
+    '....kvvvvvvk....',
+    '....kvvvvvvk....',
+    '....kggggggk....',
+    '....kkkkkkkk....',
+    '......kddk......',
   ];
   const TORSO_BACK = [
-    '....kddddk....',
-    '..kkbbbbbbkk..',
-    '.kbkbbbbbbkbk.',
-    '.kbkbhhhhbkbk.',
-    '.kbkbhhhhbkbk.',
-    '.kbkbbbbbbkbk.',
-    '.kkkbbbbbbkkk.',
-    '...kbbbbbbk...',
-    '...kkkkkkkk...',
+    '...kkbbbbbbkk...',
+    '..kbkbbbbbbkbk..',
+    '..kbkbhhhhbkbk..',
+    '..kbkbhhhhbkbk..',
+    '..kbkbhhhhbkbk..',
+    '..kbkbbbbbbkbk..',
+    '..kkkbbbbbbkkk..',
+    '....kbbbbbbk....',
+    '....kkkkkkkk....',
   ];
   const TORSO_FRONT = [
-    '....kddddk....',
-    '..kkbbbbbbkk..',
-    '.kbkbbbbbbkbk.',
-    '.kbkbbllbbkbk.',
-    '.kbkbbllbbkbk.',
-    '.kbkbbbbbbkbk.',
-    '.kkkbbbbbbkkk.',
-    '...kbbbbbbk...',
-    '...kkkkkkkk...',
+    '...kkbbbbbbkk...',
+    '..kbkbbbbbbkbk..',
+    '..kbkbbllbbkbk..',
+    '..kbkbbllbbkbk..',
+    '..kbkbbllbbkbk..',
+    '..kbkbbbbbbkbk..',
+    '..kkkbbbbbbkkk..',
+    '....kbbbbbbk....',
+    '....kkkkkkkk....',
   ];
   const LEGS_IDLE = [
-    '..kddk..kddk..',
-    '..kddk..kddk..',
-    '..kddk..kddk..',
-    '..kddk..kddk..',
-    '.kbbbk..kbbbk.',
-    '.kkkkk..kkkkk.',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '..kbbbk..kbbbk..',
+    '..kkkkk..kkkkk..',
   ];
   const LEGS_RUN_A = [
-    '..kddk..kddk..',
-    '..kddk..kddk..',
-    '.kbbbk..kddk..',
-    '.kkkkk..kddk..',
-    '........kbbbk.',
-    '........kkkkk.',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '...kddk..kddk...',
+    '..kbbbk..kddk...',
+    '..kkkkk..kddk...',
+    '.........kddk...',
+    '.........kbbbk..',
+    '.........kkkkk..',
   ];
   const LEGS_RUN_B = LEGS_RUN_A.map((r) => r.split('').reverse().join(''));
   const RACKET_UP = [
@@ -135,9 +143,8 @@
       this.canvas.height = Math.round(h * this.dpr);
       this.canvas.style.width = w + 'px';
       this.canvas.style.height = h + 'px';
-      const areaH = Math.max(120, area.bottom - area.top);
-      this.scale = clamp(Math.round(Math.min(w / 190, areaH / 250)), 2, 6);
-      this.bw = Math.ceil(w / this.scale); this.bh = Math.ceil(h / this.scale);
+      this.scale = h > w ? w / 160 : h / 160;
+      this.bw = Math.round(w / this.scale); this.bh = Math.ceil(h / this.scale);
       this.buf.width = this.bw; this.buf.height = this.bh;
       this.area = { top: area.top / this.scale, bottom: area.bottom / this.scale };
       this.setupCamera();
@@ -145,45 +152,28 @@
     }
 
     setupCamera() {
+      // Fausse perspective façon Game Boy : profondeur écrasée, léger rétrécissement vers le fond,
+      // hauteur du volant en pixels fixes. Les personnages gardent la même taille partout.
+      const L = COURT.halfLength;
       const portrait = this.bh > this.bw;
-      this.cam = portrait
-        ? { pos: { x: 0, y: 30, z: -34 }, look: { x: 0, y: 0.2, z: 0.6 } }
-        : { pos: { x: 0, y: 26, z: -36 }, look: { x: 0, y: 0.4, z: 0.4 } };
-      const c = this.cam.pos, l = this.cam.look;
-      const f = norm({ x: l.x - c.x, y: l.y - c.y, z: l.z - c.z });
-      const r = norm(cross({ x: 0, y: 1, z: 0 }, f)); // droite = +x monde à droite de l'écran
-      const u = cross(f, r);
-      this.basis = { f, r, u };
-      const pts = [];
-      for (const x of [-3.5, 3.5]) for (const z of [-7.4, 7.2]) pts.push({ x, y: 0, z });
-      pts.push({ x: 0, y: 3.2, z: 7.2 }); pts.push({ x: 0, y: 1.2, z: -7.4 });
-      let maxRx = 0, maxRy = -Infinity, minRy = Infinity;
-      for (const p of pts) {
-        const dx = p.x - c.x, dy = p.y - c.y, dz = p.z - c.z;
-        const zc = dx * f.x + dy * f.y + dz * f.z;
-        const xc = dx * r.x + dy * r.y + dz * r.z;
-        const yc = dx * u.x + dy * u.y + dz * u.z;
-        maxRx = Math.max(maxRx, Math.abs(xc / zc));
-        maxRy = Math.max(maxRy, yc / zc);
-        minRy = Math.min(minRy, yc / zc);
-      }
-      const margin = 3;
-      const availW = this.bw - 2 * margin;
-      const availH = Math.max(60, this.area.bottom - this.area.top - 2 * margin);
-      this.f = Math.min(availW / 2 / maxRx, availH / (maxRy - minRy));
-      this.cx = this.bw / 2;
-      const extra = availH - this.f * (maxRy - minRy);
-      this.cy = this.area.top + margin + extra / 2 + this.f * maxRy;
+      const areaH = Math.max(80, this.area.bottom - this.area.top);
+      const maxW = portrait ? this.bw - 14 : this.bw * 0.5;          // en paysage, la croix et les boutons sont sur les côtés
+      this.KX = maxW / 2 / COURT.halfWidthDoubles;                  // px par mètre en largeur (ligne de fond proche)
+      this.SHRINK = 0.14;                                           // rétrécissement de la ligne de fond éloignée
+      const depthPx = areaH - 42;                                   // 20 px pour tribunes + tête du bot, 22 px pour le robot proche
+      this.KZ = Math.min(depthPx / (2 * L + 2.6), this.KX * 0.6);   // px par mètre en profondeur
+      this.KY = Math.max(6, Math.round(this.KZ * 1.2));             // px par mètre en hauteur
+      this.cx = Math.floor(this.bw / 2);
+      const courtPx = (2 * L + 2.6) * this.KZ;
+      this.baseY = Math.round(this.area.top + 20 + (areaH - 42 - courtPx) / 2 + courtPx); // y écran de z = -L-1.3
     }
 
     project(x, y, z) {
-      const c = this.cam.pos, b = this.basis;
-      const dx = x - c.x, dy = y - c.y, dz = z - c.z;
-      const zc = dx * b.f.x + dy * b.f.y + dz * b.f.z;
-      const xc = dx * b.r.x + dy * b.r.y + dz * b.r.z;
-      const yc = dx * b.u.x + dy * b.u.y + dz * b.u.z;
-      const s = this.f / Math.max(0.5, zc);
-      return { x: this.cx + xc * s + this.shakeX, y: this.cy - yc * s + this.shakeY, s };
+      const L = COURT.halfLength;
+      const t = clamp((z + L) / (2 * L), -0.3, 1.3);
+      const d = 1 - this.SHRINK * t;
+      const s = this.KX * d;
+      return { x: this.cx + x * s + this.shakeX, y: this.baseY - (z + L + 1.3) * this.KZ - y * this.KY + this.shakeY, s };
     }
     px(x, y, z) { const p = this.project(x, y, z); return { x: Math.round(p.x), y: Math.round(p.y), s: p.s }; }
 
@@ -268,9 +258,9 @@
       ctx.fillStyle = PAL.hallDark; ctx.fillRect(0, 0, this.bw, this.bh);
       // tribunes derrière le fond de court adverse
       const hz = this.px(0, 0, L + 1.3);
-      ctx.fillStyle = PAL.stand; ctx.fillRect(0, hz.y - 24, this.bw, 24);
-      ctx.fillStyle = PAL.outline; ctx.fillRect(0, hz.y - 25, this.bw, 1);
-      for (let y = hz.y - 22; y < hz.y - 2; y += 4) {
+      ctx.fillStyle = PAL.stand; ctx.fillRect(0, hz.y - 18, this.bw, 18);
+      ctx.fillStyle = PAL.outline; ctx.fillRect(0, hz.y - 19, this.bw, 1);
+      for (let y = hz.y - 16; y < hz.y - 2; y += 4) {
         for (let x = (y / 4) % 2 ? 1 : 3; x < this.bw; x += 4) {
           ctx.fillStyle = [PAL.crowdA, PAL.crowdB, PAL.crowdC][((x * 7 + y * 13) >> 2) % 3];
           ctx.fillRect(x, y, 2, 2);
@@ -356,34 +346,34 @@
       const pal = this.robotPalette(r);
       // ombre
       b.fillStyle = PAL.shadow;
-      b.fillRect(p.x - 5, p.y - 1, 11, 1); b.fillRect(p.x - 6, p.y, 13, 1); b.fillRect(p.x - 5, p.y + 1, 11, 1);
+      b.fillRect(p.x - 6, p.y - 1, 13, 1); b.fillRect(p.x - 7, p.y, 15, 1); b.fillRect(p.x - 6, p.y + 1, 13, 1);
 
       const moving = Math.hypot(r.vx, r.vz) > 0.5;
       const frame = moving ? (Math.floor(r.walk * 3) % 2 ? LEGS_RUN_A : LEGS_RUN_B) : LEGS_IDLE;
       const rows = (front ? HEAD_FRONT : HEAD_BACK).concat(front ? TORSO_FRONT : TORSO_BACK, frame);
       const key = (front ? 'F' : 'B') + (moving ? (frame === LEGS_RUN_A ? 'a' : 'b') : 'i');
       const img = this.sprite(key, rows, pal, false);
-      const ox = p.x - 7, oy = p.y - 20;
+      const ox = p.x - 8, oy = p.y - 24;
       if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;
       b.drawImage(img, ox, oy);
       b.globalAlpha = 1;
 
       // raquette : main droite = à droite du sprite pour le joueur (vu de dos), à gauche pour le bot (de face)
       const dir = front ? -1 : 1;
-      const handX = p.x + dir * 6, handY = oy + 10;
+      const handX = p.x + dir * 7, handY = oy + 12;
       let rk, rx, ry;
       const rpal = { k: PAL.outline, r: '#f0f0e8', s: '#8890a8', n: '#6a4a30' };
       if (r.swing > 0) {
         const u = 1 - r.swing / 0.3;
         const low = r.swingShot === 'drop' || r.swingShot === 'serve';
-        if (low) { rk = u < 0.5 ? RACKET_DOWN : (dir > 0 ? RACKET_RIGHT : RACKET_LEFT); rx = handX + dir * (u < 0.5 ? 0 : 3) - 4; ry = u < 0.5 ? handY + 2 : handY - 2; }
-        else if (u < 0.3) { rk = RACKET_UP; rx = handX - 4; ry = oy - 9; }
-        else if (u < 0.65) { rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = oy - 2; }
-        else { rk = RACKET_DOWN; rx = handX + dir * 2 - 4; ry = handY + 1; }
+        if (low) { rk = u < 0.5 ? RACKET_DOWN : (dir > 0 ? RACKET_RIGHT : RACKET_LEFT); rx = handX + dir * (u < 0.5 ? 0 : 3) - 4; ry = u < 0.5 ? handY + 3 : handY - 2; }
+        else if (u < 0.3) { rk = RACKET_UP; rx = handX - 4; ry = oy - 10; }
+        else if (u < 0.65) { rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = oy - 1; }
+        else { rk = RACKET_DOWN; rx = handX + dir * 2 - 4; ry = handY + 2; }
       } else if (r.armed) {
-        rk = RACKET_UP; rx = handX + dir * 2 - 4; ry = oy - 8 + (Math.floor(this.time * 8) % 2);
+        rk = RACKET_UP; rx = handX + dir * 2 - 4; ry = oy - 9 + (Math.floor(this.time * 8) % 2);
       } else {
-        rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 3 - 4; ry = handY + 3;
+        rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 3 - 4; ry = handY + 4;
       }
       const rkey = rk === RACKET_UP ? 'rU' : rk === RACKET_DOWN ? 'rD' : rk === RACKET_RIGHT ? 'rR' : 'rL';
       b.drawImage(this.sprite(rkey, rk, rpal, false), Math.round(rx), Math.round(ry));
@@ -391,10 +381,10 @@
       // barre de charge pendant l'armement
       if (r.armed && !r.isAI) {
         const k = clamp((this.gameTime - r.armed.t0) / RS.CHARGE_TIME, 0, 1);
-        b.fillStyle = PAL.outline; b.fillRect(p.x - 7, p.y + 3, 14, 4);
-        b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 6, p.y + 4, Math.round(12 * k), 2);
+        b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
+        b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * k), 2);
       }
-      if (r.overheat > 0) this.text('OVERHEAT', p.x, oy - 12, '#f83030', 8, true);
+      if (r.overheat > 0) this.text('HOT!', p.x, oy - 12, '#f83030', 8, true);
     }
 
     text(str, x, y, color, size, center, outline) {

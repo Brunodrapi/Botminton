@@ -14,7 +14,7 @@ function scriptedInput(game, skill) {
   const held = {}, just = [];
   let stick = { x: 0, y: 0 };
   if (game.state === 'serve' && game.server === p) {
-    just.push(Math.random() < 0.5 ? 'clear' : 'drop'); held.clear = true;
+    just.push(Math.random() < 0.5 ? 'A' : 'B');
     return { stick, held, just };
   }
   if (game.state === 'rally' && game.lastHitter !== p && game.pred) {
@@ -30,9 +30,9 @@ function scriptedInput(game, skill) {
     if (d > 0.05) stick = { x: dx / d * Math.min(1, d / 0.3), y: dz / d * Math.min(1, d / 0.3) };
     const near = Math.hypot(s.x - p.x, s.z - (p.z + RS.SWEET)) < 1.6 && s.z < 0.3;
     if (near) {
-      const shot = s.y > 1.9 ? (Math.random() < 0.6 ? 'smash' : 'drop') : s.y > 1.1 ? 'drive' : 'clear';
-      if (!p.armed) just.push(shot);
-      held[p.armed ? p.armed.shot : shot] = true;
+      const btn = s.y > 1.9 ? (Math.random() < 0.7 ? 'A' : 'B') : s.y > 1.1 ? 'A' : 'B';
+      if (!p.armed) just.push(btn);
+      held[p.armed ? p.armed.btn : btn] = true;
     }
   }
   return { stick, held, just };

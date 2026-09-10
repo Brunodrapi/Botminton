@@ -20,7 +20,7 @@
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite'];
 
-  const SHOT_NAMES = { clear: 'DÉGAGÉ', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
+  const SHOT_NAMES = { clear: 'DÉGAGÉ', attack: 'DÉGAGÉ COURT', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
   const LEVEL_NAMES = ['FAIBLE', 'OK', 'PARFAIT'];
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
@@ -98,7 +98,7 @@
       this.rallyHits = 0;
       this.state = 'serve';
       this.serveTimer = srv.isAI ? rnd(0.9, 1.5) : 0;
-      this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A LONG  B COURT', t: 0 };
+      this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A COURT  B LONG', t: 0 };
     }
 
     /* ------------------------------------------------------------------ update */
@@ -122,8 +122,8 @@
           this.serveTimer -= dt;
           if (this.serveTimer <= 0) this.serve(srv, Math.random() < 0.45 ? 'drop' : 'clear');
         } else if (input.just.length) {
-          const shot = input.just[input.just.length - 1];
-          this.serve(srv, shot === 'drop' ? 'drop' : 'clear');
+          const btn = input.just[input.just.length - 1];
+          this.serve(srv, btn === 'A' ? 'drop' : 'clear');
         }
       } else if (this.state === 'rally') {
         const n = Math.max(1, Math.ceil(dt / (1 / 120)));
@@ -164,24 +164,20 @@
         if (Math.abs(mz) < 1e-6) mz = 0;
       }
       p.aimX = mx;
-      if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
-      for (const shot of input.just) p.armed = { shot, t0: this.time, lastD: null };
-      if (p.armed && !input.held[p.armed.shot]) p.armed = null;
-      // Auto-course : bouton maintenu = le robot file tout seul vers le volant (Mario Tennis).
-      if (p.armed && this.lastHitter !== p && this.pred) {
-        const t = this.interceptFor(p);
-        if (t) {
-          const dx = t.x - p.x, dz = t.z + p.side * SWEET - p.z;
-          const d = Math.hypot(dx, dz);
-          if (d > 0.08) {
-            const k = Math.min(1, d / 0.3);
-            const w = mag > 0.2 ? 0.35 : 0.85;
-            mx = mx * (mag > 0.2 ? 1 : 0) + dx / d * k * w;
-            mz = mz * (mag > 0.2 ? 1 : 0) + dz / d * k * w;
-          }
-        }
-      }
+      p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
       p.moveX = mx; p.moveZ = mz;
+      if (this.state !== 'rally') { p.armed = null; return; }
+      for (const btn of input.just) if (btn === 'A' || btn === 'B') p.armed = { btn, t0: this.time, lastD: null };
+      if (p.armed && !input.held[p.armed.btn]) p.armed = null;
+    }
+
+    /** Traduit bouton + croix + hauteur du volant en type de frappe (schéma Game Boy). */
+    resolveShot(r, btn, charged) {
+      const y = this.shuttle.y;
+      const up = (r.dirZ || 0) > 0.5;
+      if (btn === 'B') return up ? 'attack' : 'clear';
+      if (charged && y >= 1.75) return 'smash';
+      return up ? 'drop' : 'drive';
     }
 
     /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
@@ -296,7 +292,7 @@
       let level = Math.min(place, charged ? 2 : 1);
       if (r.isAI) level = this.aiLevel(level);
 
-      let shot = a.shot;
+      let shot = r.isAI ? a.shot : this.resolveShot(r, a.btn, charged);
       let note = null;
       if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
 
@@ -318,6 +314,7 @@
       else if (shot === 'drive') this.addHeat(r, 5);
       else if (shot === 'drop') this.addHeat(r, -6);
       else if (shot === 'clear') this.addHeat(r, -4);
+      else if (shot === 'attack') this.addHeat(r, 0);
 
       const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : (!charged && place === 2 ? 'PRÉCIPITÉ' : SHOT_NAMES[shot]));
       this.addFx(label, s.x, s.y + 0.3, s.z, LEVEL_COLORS[level], r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
@@ -346,6 +343,12 @@
           const tz = [4.3, 5.6, 6.35][level];
           const angle = level === 0 ? 60 : (y > 1.6 ? 42 : 50);
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 1.2 : 0.7 };
+          break;
+        }
+        case 'attack': { // dégagé court : plus tendu, plus rapide, tombe mi-court
+          const tz = [3.6, 4.4, 5.0][level];
+          const angle = level === 0 ? 50 : (y > 1.6 ? 24 : 34);
+          spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 0.9 : 0.5 };
           break;
         }
         case 'drop': {
@@ -430,8 +433,8 @@
       const r = Math.random();
       const canSmash = ai.heat < 85 && h >= 1.9 && depth <= 5.2;
       if (canSmash && r < d.aggression) return 'smash';
-      if (h >= 1.9) return Math.random() < 0.5 ? 'drop' : 'clear';
-      if (h >= 1.15) return r < 0.4 ? 'drive' : r < 0.75 ? 'clear' : 'drop';
+      if (h >= 1.9) return r < 0.45 ? 'drop' : r < 0.75 ? 'clear' : 'attack';
+      if (h >= 1.15) return r < 0.35 ? 'drive' : r < 0.65 ? 'clear' : r < 0.85 ? 'attack' : 'drop';
       if (depth < 2.6) return r < 0.5 ? 'drop' : 'clear';
       return r < 0.8 ? 'clear' : 'drive';
     }

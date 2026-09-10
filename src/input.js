@@ -1,81 +1,79 @@
-/* Rogue Shuttle — entrées : stick virtuel flottant, 4 boutons tactiles, clavier. */
+/* Rogue Shuttle — entrées : croix directionnelle fixe (8 directions), boutons A/B, clavier. */
 (function (root) {
   'use strict';
 
-  const KEY_SHOTS = { a: 'clear', b: 'drop', x: 'smash', y: 'drive' };
+  const KEY_BTNS = { a: 'A', x: 'A', b: 'B', c: 'B', ' ': 'A' };
 
   class Input {
     constructor(opts) {
-      this.stickZone = opts.stickZone;
-      this.stickBase = opts.stickBase;
-      this.stickKnob = opts.stickKnob;
-      this.radius = opts.radius || 46;
+      this.dpad = opts.dpad;           // élément visuel de la croix (position fixe)
+      this.dpadZone = opts.dpadZone;   // zone tactile plus large autour
       this.stick = { x: 0, y: 0 };
       this.held = {};
       this.just = [];
       this.keys = {};
-      this.stickId = null;
-      this.origin = null;
+      this.dpadId = null;
       this.onAny = opts.onAny || (() => {});
-      this.bindStick();
+      this.bindDpad();
       for (const btn of opts.buttons) this.bindButton(btn);
       this.bindKeyboard();
     }
 
-    bindStick() {
-      const z = this.stickZone;
+    setDir(x, y) {
+      this.stick.x = x; this.stick.y = y;
+      this.dpad.classList.toggle('up', y > 0.3);
+      this.dpad.classList.toggle('down', y < -0.3);
+      this.dpad.classList.toggle('left', x < -0.3);
+      this.dpad.classList.toggle('right', x > 0.3);
+    }
+
+    dirFromPoint(cx, cy) {
+      const r = this.dpad.getBoundingClientRect();
+      const dx = cx - (r.left + r.width / 2), dy = cy - (r.top + r.height / 2);
+      const d = Math.hypot(dx, dy);
+      if (d < r.width * 0.12) { this.setDir(0, 0); return; }
+      const a = Math.round(Math.atan2(-dy, dx) / (Math.PI / 4)) * (Math.PI / 4);
+      this.setDir(Math.round(Math.cos(a) * 100) / 100, Math.round(Math.sin(a) * 100) / 100);
+    }
+
+    bindDpad() {
+      const z = this.dpadZone;
       z.addEventListener('pointerdown', (e) => {
-        if (this.stickId !== null) return;
+        if (this.dpadId !== null) return;
         e.preventDefault();
         this.onAny();
-        this.stickId = e.pointerId;
+        this.dpadId = e.pointerId;
         try { z.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-        this.origin = { x: e.clientX, y: e.clientY };
-        this.stick.x = 0; this.stick.y = 0;
-        this.stickBase.style.display = 'block';
-        this.stickBase.style.left = (e.clientX - this.radius - 14) + 'px';
-        this.stickBase.style.top = (e.clientY - this.radius - 14) + 'px';
-        this.stickKnob.style.transform = 'translate(0px,0px)';
+        this.dirFromPoint(e.clientX, e.clientY);
       });
-      const move = (e) => {
-        if (e.pointerId !== this.stickId) return;
+      z.addEventListener('pointermove', (e) => {
+        if (e.pointerId !== this.dpadId) return;
         e.preventDefault();
-        let dx = e.clientX - this.origin.x, dy = e.clientY - this.origin.y;
-        const d = Math.hypot(dx, dy);
-        if (d > this.radius) { dx *= this.radius / d; dy *= this.radius / d; }
-        let nx = dx / this.radius, ny = dy / this.radius;
-        const n = Math.hypot(nx, ny);
-        const dead = 0.14;
-        if (n < dead) { nx = 0; ny = 0; }
-        else { const k = (n - dead) / (1 - dead) / n; nx *= k; ny *= k; }
-        this.stick.x = nx; this.stick.y = -ny;
-        this.stickKnob.style.transform = `translate(${dx}px,${dy}px)`;
-      };
+        this.dirFromPoint(e.clientX, e.clientY);
+      });
       const end = (e) => {
-        if (e.pointerId !== this.stickId) return;
-        this.stickId = null;
-        this.stick.x = 0; this.stick.y = 0;
-        this.stickBase.style.display = 'none';
+        if (e.pointerId !== this.dpadId) return;
+        this.dpadId = null;
+        this.setDir(0, 0);
       };
-      z.addEventListener('pointermove', move);
       z.addEventListener('pointerup', end);
       z.addEventListener('pointercancel', end);
       z.addEventListener('lostpointercapture', end);
     }
 
     bindButton(btn) {
-      const shot = btn.dataset.shot;
+      const name = btn.dataset.btn;
       const press = (e) => {
         e.preventDefault();
         this.onAny();
         try { btn.setPointerCapture(e.pointerId); } catch (_) { /* ignore */ }
-        if (!this.held[shot]) this.just.push(shot);
-        this.held[shot] = true;
+        if (!this.held[name]) this.just.push(name);
+        this.held[name] = true;
         btn.classList.add('active');
       };
       const release = (e) => {
         if (e) e.preventDefault();
-        this.held[shot] = false;
+        this.held[name] = false;
         btn.classList.remove('active');
       };
       btn.addEventListener('pointerdown', press);
@@ -90,25 +88,26 @@
         if (e.repeat) return;
         const k = e.key.toLowerCase();
         this.keys[k] = true;
-        if (KEY_SHOTS[k]) { this.onAny(); this.just.push(KEY_SHOTS[k]); this.held[KEY_SHOTS[k]] = true; }
+        if (KEY_BTNS[k]) { this.onAny(); if (!this.held[KEY_BTNS[k]]) this.just.push(KEY_BTNS[k]); this.held[KEY_BTNS[k]] = true; }
         if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
       });
       window.addEventListener('keyup', (e) => {
         const k = e.key.toLowerCase();
         this.keys[k] = false;
-        if (KEY_SHOTS[k]) this.held[KEY_SHOTS[k]] = false;
+        if (KEY_BTNS[k]) this.held[KEY_BTNS[k]] = false;
       });
       window.addEventListener('blur', () => { this.keys = {}; for (const s in this.held) this.held[s] = false; });
     }
 
     consume() {
       let sx = this.stick.x, sy = this.stick.y;
-      if (this.stickId === null) {
+      if (this.dpadId === null) {
         const k = this.keys;
         sx = (k.arrowright || k.d ? 1 : 0) - (k.arrowleft || k.q ? 1 : 0);
         sy = (k.arrowup || k.z || k.w ? 1 : 0) - (k.arrowdown || k.s ? 1 : 0);
         const n = Math.hypot(sx, sy);
         if (n > 1) { sx /= n; sy /= n; }
+        if (sx || sy) this.setDir(sx, sy); else if (this.stick.x || this.stick.y) this.setDir(0, 0);
       }
       const out = { stick: { x: sx, y: sy }, held: Object.assign({}, this.held), just: this.just };
       this.just = [];
