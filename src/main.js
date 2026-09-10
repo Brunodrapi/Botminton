@@ -40,7 +40,7 @@
     }
   }
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
-  const panels = ['menu', 'help', 'pause', 'end', 'choice'];
+  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -51,17 +51,36 @@
 
   function startRun() {
     sfx.unlock();
+    handicapShown = null;
     game.startRun(settings);
     beginRound();
   }
 
   /** Reprend la partie après le menu ou après un choix de carte. */
+  let handicapShown = null;
   function beginRound() {
     $('chassisName').textContent = RS.CHASSIS[settings.chassis].name;
     $('diffName').textContent = game.diff.name;
     endShown = false;
-    showPanel(null);
     updateDeck();
+    applyHandicapFilter();
+    const h = game.run.handicap;
+    if (h && handicapShown !== h.key) {          // annonce du protocole avant le premier point du boss
+      handicapShown = h.key;
+      $('malusCard').innerHTML = `<span class="ico">${h.icon}</span><span><span class="nm">${h.name}</span><span class="ds">${h.desc}</span></span>`;
+      game.pause();
+      showPanel('malus');
+      return;
+    }
+    showPanel(null);
+  }
+
+  /** Les protocoles purement visuels passent par un filtre CSS sur le canvas. */
+  function applyHandicapFilter() {
+    const k = game.run && game.run.handicap ? game.run.handicap.key : null;
+    canvas.classList.toggle('fx-mono', k === 'mono');
+    canvas.classList.toggle('fx-sepia', k === 'sepia');
+    canvas.classList.toggle('fx-flip', k === 'flip');
   }
 
   /* ---------------------------------------------------------------- améliorations */
@@ -74,7 +93,10 @@
   function updateDeck() {
     const list = ownedList();
     $('deck').classList.toggle('hidden', !list.length);
-    $('deck').innerHTML = list.map(([k, n]) => `<span class="chip">${upDef(k).icon}<b>${n}</b></span>`).join('');
+    const h = game.run && game.run.handicap;
+    $('deck').classList.toggle('hidden', !list.length && !h);
+    $('deck').innerHTML = (h ? `<span class="chip malus" title="${h.name}">${h.icon}</span>` : '')
+      + list.map(([k, n]) => `<span class="chip">${upDef(k).icon}<b>${n}</b></span>`).join('');
   }
   function deckBig(el) {
     const list = ownedList();
@@ -86,9 +108,10 @@
   /** Écran de choix : trois cartes, ou trois modificateurs de raquette. */
   function showChoice(kind) {
     const isCard = kind === 'cards';
+    const step = game.nextStep();
     const list = isCard ? game.offerCards() : game.offerRackets();
     if (!list.length) { afterChoice(kind); return; }
-    $('choiceTitle').textContent = isCard ? 'MANCHE GAGNÉE' : 'FIN DE NIVEAU';
+    $('choiceTitle').textContent = isCard ? `${step} POINTS` : 'NIVEAU FRANCHI';
     $('choiceSub').textContent = isCard ? 'Choisis une pièce à monter' : 'Choisis un modificateur de raquette';
     const owned = isCard ? game.run.cards : game.run.racket;
     $('choiceList').innerHTML = list.map((u) => {
@@ -117,6 +140,7 @@
   }
 
   $('playBtn').addEventListener('click', startRun);
+  $('malusBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
   $('helpBtn').addEventListener('click', () => showPanel('help'));
   $('helpBack').addEventListener('click', () => showPanel('menu'));
   $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); deckBig($('pauseDeck')); showPanel('pause'); } });
@@ -160,7 +184,7 @@
     if (game.state === 'menu') return;
     $('scoreYou').textContent = RS.fmtScore(game.score[0]);
     $('scoreBot').textContent = RS.fmtScore(game.score[1]);
-    $('stage').textContent = `NIVEAU ${game.run.level + 1} · MANCHE ${game.run.round + 1} → ${RS.POINTS_TO_WIN}`;
+    $('stage').textContent = `NIVEAU ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
     heatPct.textContent = p.energy.toFixed(0) + '%';
@@ -180,12 +204,12 @@
     $('endTitle').textContent = won ? '🏆 RUN TERMINÉE' : '💀 RUN PERDUE';
     $('endTitle').style.color = won ? '#5dff7a' : '#ff5e5e';
     $('endScore').textContent = won
-      ? `Les 4 niveaux sont tombés`
-      : `Niveau ${game.run.level + 1} · manche ${game.run.round + 1} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`;
+      ? 'Les 4 niveaux sont tombés'
+      : `Niveau ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`;
     const p = game.player;
     const m = Math.floor(game.matchTime / 60), s = Math.floor(game.matchTime % 60);
     const rows = [
-      ['Manches gagnées', Math.max(0, game.run.rounds - (won ? 0 : 1))],
+      ['Niveaux franchis', game.run.levels],
       ['Durée', `${m}:${String(s).padStart(2, '0')}`],
       ['Frappes', p.stats.hits],
       ['Parfaites', p.stats.perfect],
@@ -223,5 +247,5 @@
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
-  window.__rogueShuttle = { game, renderer, input, settings, startRun };
+  window.__rogueShuttle = { game, renderer, input, settings, startRun, applyHandicapFilter };
 })();

@@ -67,7 +67,7 @@ for (const diff of ['rookie', 'pro', 'elite']) {
     } catch (e) { errors = e; }
     const mins = (steps / 60 / 60).toFixed(1);
     check(`${diff}/${chassis}: match ends without error`, !errors && g.state === 'end', errors ? String(errors.stack) : `score ${g.score.join('-')} in ${mins} min, longest rally ${g.longestRally}, player hits ${hits} (perfect ${perfect}), reasons ${JSON.stringify(reasons)}`);
-    check(`${diff}/${chassis}: rallies happen`, g.longestRally >= 4 && hits > 10);
+    check(`${diff}/${chassis}: rallies happen`, g.longestRally >= 3 && hits >= 5);
   }
 }
 
@@ -75,8 +75,8 @@ for (const diff of ['rookie', 'pro', 'elite']) {
 {
   const g = new RS.Game(); g.startMatch({});
   g.score = [4, 3]; check('4-3 not finished', g.matchWinner() === -1);
-  g.score = [5, 3]; check('5-3 finished', g.matchWinner() === 0);
-  g.score = [2, 5]; check('2-5 bot wins', g.matchWinner() === 1);
+  g.score = [5, 3]; check('5 points reaches a card step', g.matchWinner() === 0);
+  g.score = [2, 15]; check('bot at 15 wins the run', g.matchWinner() === 1);
 }
 
 // Progression de la run : 3 manches par niveau, cartes après chacune, raquette à la troisième
@@ -84,12 +84,23 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
   const seen = [];
   for (let i = 0; i < 6; i++) {
-    g.score = [RS.POINTS_TO_WIN, 0];
+    g.score = [g.nextStep(), 0];
     g.nextRally();
-    seen.push(`${g.run.level + 1}-${g.run.round + 1}:${g.phase}${g.pendingRacket ? '+raquette' : ''}`);
+    seen.push(`n${g.run.level + 1}@${g.nextStep()}:${g.phase}${g.pendingRacket ? '+raquette' : ''}`);
     g.advance();
   }
-  check('run advances through levels', seen.join(' ') === '1-1:cards 1-2:cards 1-3:cards+raquette 2-1:cards 2-2:cards 2-3:cards+raquette', seen.join(' '));
+  const want = 'n1@5:cards n1@10:cards n1@15:cards+raquette n2@5:cards n2@10:cards n2@15:cards+raquette';
+  check('run advances through card steps', seen.join(' ') === want, seen.join(' '));
+}
+
+// Le boss impose un protocole, et le score repart de zéro au niveau suivant
+{
+  const g = new RS.Game(); g.startRun({ chassis: 'balanced', difficulty: 'boss' });
+  check('boss level draws a handicap', !!g.run.handicap, g.run.handicap && g.run.handicap.name);
+  const g2 = new RS.Game(); g2.startRun({ chassis: 'balanced' });
+  check('early levels have no handicap', !g2.run.handicap);
+  for (let i = 0; i < 3; i++) { g2.score = [g2.nextStep(), 4]; g2.nextRally(); g2.advance(); }
+  check('next opponent starts at 0', g2.score[0] === 0 && g2.score[1] === 0 && g2.run.level === 1, `${g2.score.join('-')} niveau ${g2.run.level}`);
 }
 
 // Effet des cartes

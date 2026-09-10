@@ -26,6 +26,14 @@ html, body {
 }
 #game { position: fixed; inset: 0; }
 canvas { position: absolute; inset: 0; display: block; image-rendering: pixelated; image-rendering: crisp-edges; }
+canvas.fx-mono { filter: grayscale(1) contrast(1.15); }
+canvas.fx-sepia { filter: sepia(0.9) saturate(1.3) contrast(1.05); }
+canvas.fx-flip { transform: rotate(180deg); }
+.malus-card { display: flex; align-items: center; gap: 12px; border: 3px solid var(--ink); background: #ffe9e0; padding: 12px 10px; margin-top: 14px; box-shadow: 4px 4px 0 var(--ink); }
+.malus-card .ico { font-size: 26px; line-height: 1; }
+.malus-card .nm { font-size: 9px; display: block; }
+.malus-card .ds { font-size: 6px; display: block; line-height: 1.7; margin-top: 6px; color: var(--ink-soft); }
+#deck .chip.malus { background: rgba(200,40,40,0.85); border-color: #ffd0d0; }
 .hidden { display: none !important; }
 button { font-family: inherit; }
 

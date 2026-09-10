@@ -212,8 +212,11 @@
       b.imageSmoothingEnabled = false;
       if (game.shake > 0) { const k = game.shake * 12; this.shakeX = Math.round((Math.random() - 0.5) * k); this.shakeY = Math.round((Math.random() - 0.5) * k); }
       else { this.shakeX = 0; this.shakeY = 0; }
-      if (this.courtDirty) { this.buildCourt(); this.courtDirty = false; }
+      const hcap = game.run && game.run.handicap ? game.run.handicap.key : null;
+      if (hcap !== this.lastHcap) { this.lastHcap = hcap; this.courtDirty = true; }
+      if (this.courtDirty) { this.buildCourt(hcap === 'nolines'); this.courtDirty = false; }
 
+      if (hcap === 'dark') { this.drawBlackout(game); this.blit(); return; }
       b.drawImage(this.courtLayer, this.shakeX, this.shakeY);
       if (game.state !== 'menu') {
         const s = game.shuttle;
@@ -231,12 +234,40 @@
         b.drawImage(this.netLayer, 0, 0);
       }
 
+      this.blit();
+    }
+
+    blit() {
       const ctx = this.ctx;
       ctx.imageSmoothingEnabled = false;
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.fillStyle = PAL.hallDark;
       ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
       ctx.drawImage(this.buf, 0, 0, this.bw * this.scale * this.dpr, this.bh * this.scale * this.dpr);
+    }
+
+    /** Protocole « panne de lumière » : seuls le volant, les raquettes et la bande du filet restent visibles. */
+    drawBlackout(game) {
+      const b = this.bctx;
+      b.fillStyle = '#05060a';
+      b.fillRect(0, 0, this.bw, this.bh);
+      const W = COURT.halfWidthDoubles;
+      const yTop = this.px(0, COURT.netHeight, 0).y;
+      const xl = this.px(-W, 0, 0).x, xr = this.px(W, 0, 0).x;
+      b.fillStyle = '#3a4050'; b.fillRect(xl, yTop, xr - xl + 1, 1);      // repère minimal : la bande du filet
+      if (game.state === 'menu') return;
+      for (const r of game.robots) {
+        const swing = r.swing > 0 ? 1 - r.swing / RS.SWING_TIME : -1;
+        const hy = swing >= 0 && swing < 0.6 ? 2.1 : 1.45;
+        const p = this.px(r.x - r.side * 0.45, hy, r.z);
+        b.strokeStyle = r.isAI ? '#f8a0a0' : '#a0f8c0'; b.lineWidth = 1;
+        b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, 3, 4, 0, 0, Math.PI * 2); b.stroke();
+      }
+      this.drawShadow(game.shuttle);
+      this.drawTrail(game.shuttle);
+      this.drawShuttle(game.shuttle);
+      this.drawFx(game);
+      this.drawMessage(game);
     }
 
     fillPoly(ctx, pts, fill, stroke) {
@@ -252,7 +283,7 @@
       ctx.beginPath(); ctx.moveTo(p.x + 0.5, p.y + 0.5); ctx.lineTo(q.x + 0.5, q.y + 0.5); ctx.stroke();
     }
 
-    buildCourt() {
+    buildCourt(noLines) {
       const c = this.courtLayer; c.width = this.bw; c.height = this.bh;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
@@ -276,6 +307,7 @@
         if (Math.round((z + L) / 2.68) % 2) this.fillPoly(ctx, [[-W, 0, z], [W, 0, z], [W, 0, Math.min(L, z + 2.68)], [-W, 0, Math.min(L, z + 2.68)]], PAL.courtLight);
       }
       const ln = PAL.line;
+      if (!noLines) {
       this.fillPoly(ctx, [[-W, 0, -L], [W, 0, -L], [W, 0, L], [-W, 0, L]], null, ln);
       this.pxLine(ctx, [-Ws, 0, -L], [-Ws, 0, L], ln);
       this.pxLine(ctx, [Ws, 0, -L], [Ws, 0, L], ln);
@@ -283,6 +315,7 @@
         this.pxLine(ctx, [-W, 0, sgn * COURT.shortService], [W, 0, sgn * COURT.shortService], ln);
         this.pxLine(ctx, [-W, 0, sgn * COURT.longServiceDoubles], [W, 0, sgn * COURT.longServiceDoubles], ln);
         this.pxLine(ctx, [0, 0, sgn * COURT.shortService], [0, 0, sgn * L], ln);
+      }
       }
       // Filet de badminton : la maille pend depuis la bande blanche et s'arrête bien au-dessus du sol
       // (760 mm de chute réglementaires), contrairement à un filet de tennis qui touche le sol.

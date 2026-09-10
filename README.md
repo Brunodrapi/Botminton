@@ -1,9 +1,9 @@
 # 🤖🏸 Rogue Shuttle — prototype
 
 Badminton arcade roguelite avec des robots, jouable dans le navigateur (iPhone en priorité).
-Une **run** enchaîne 4 niveaux (Rookie, Pro, Elite, Boss) de 3 manches en 5 points ; chaque manche
-gagnée offre le choix entre 3 cartes qui montent le robot, et la fin d'un niveau ajoute un
-modificateur de raquette. Une manche perdue arrête la run.
+Une **run** enchaîne 4 niveaux (Rookie, Pro, Elite, Boss). Chaque niveau se joue en 15 points,
+avec le choix entre 3 cartes tous les 5 points et un modificateur de raquette au quinzième.
+Si le bot atteint 15 avant toi, la run s'arrête. Le boss impose en plus un protocole tiré au sort.
 
 ## Jouer
 
@@ -34,10 +34,24 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 
 | Étape | Contenu |
 | --- | --- |
-| Manche | Premier à **5 points**. Le perdant arrête sa run |
-| Après chaque manche gagnée | Choix entre **3 cartes**, cumulables **3 fois** chacune |
-| Fin de niveau (3ᵉ manche) | Une carte **et** un modificateur de raquette |
-| Niveau suivant | Adversaire suivant ; le bot gagne aussi 4 % de vitesse par manche |
+| Niveau | **15 points** contre le même adversaire, score cumulé. Le bot à 15 arrête la run |
+| Paliers de 5 et 10 points | Choix entre **3 cartes**, cumulables **3 fois** chacune |
+| 15ᵉ point | Une carte **et** un modificateur de raquette, puis l'adversaire suivant |
+| Difficulté | Le bot gagne 4 % de vitesse à chaque palier franchi |
+
+### Protocole du boss
+
+Le dernier niveau tire au sort un handicap qui vaut pour ses 15 points :
+
+| Protocole | Effet |
+| --- | --- |
+| 💨 Volant survolté | Le volant file 30 % plus vite |
+| 🐌 Servos bridés | Ta course est ralentie de 25 % |
+| 🌑 Capteur monochrome | Image en noir et blanc |
+| 📜 Archive sépia | Image en sépia |
+| 🙃 Gyroscope inversé | Le terrain est à l'envers |
+| 🕶 Panne de lumière | Seuls le volant, les raquettes et la bande du filet restent visibles |
+| 🚫 Lignes effacées | Le terrain n'a plus aucune ligne |
 
 ### Cartes (pièces du robot)
 

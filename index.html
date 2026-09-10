@@ -61,7 +61,7 @@
       <h2>Châssis</h2>
       <div class="cards" id="chassisCards"></div>
 
-      <p class="tag run-note">4 niveaux · 3 manches de 5 points · une carte après chaque manche</p>
+      <p class="tag run-note">4 niveaux de 15 points · une carte tous les 5 points · protocole imposé chez le boss</p>
 
       <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
 
@@ -84,8 +84,9 @@
         <li>Qualité = <b>placement</b>. Point idéal 35 cm devant le robot (la petite croix quand tu es armé).
           <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span>. Mal placé = faible, et parfois faute.</li>
         <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés (+11 pour un parfait), les smashs (+8) et les sauvetages (+12). Pleine, ton robot s'auréole : le prochain smash devient un <b>SUPER SMASH</b>, foudroyant, et vide la jauge.</li>
-        <li><b>Run</b> : 4 niveaux (Rookie, Pro, Elite, Boss), 3 manches par niveau, premier à <b>5 points</b>. Une manche perdue arrête la run.</li>
-        <li>Chaque manche gagnée donne le choix entre <b>3 cartes</b> qui améliorent le robot, cumulables 3 fois. La troisième manche d'un niveau ajoute un <b>modificateur de raquette</b>.</li>
+        <li><b>Run</b> : 4 niveaux (Rookie, Pro, Elite, Boss). Chaque niveau se joue en <b>15 points</b> ; si le bot atteint 15 avant toi, la run s'arrête.</li>
+        <li>Tous les <b>5 points</b>, choix entre <b>3 cartes</b> qui améliorent le robot, cumulables 3 fois. Le quinzième point ajoute un <b>modificateur de raquette</b> et ouvre l'adversaire suivant.</li>
+        <li>Le <b>boss</b> impose un protocole tiré au sort : volant survolté, servos bridés, image monochrome ou sépia, terrain à l'envers, panne de lumière ou lignes effacées.</li>
         <li>Service : <b>A</b> court, <b>B</b> long.</li>
         <li>Clavier : flèches / ZQSD pour bouger, <b>A</b> (ou X, espace) et <b>B</b> (ou C).</li>
       </ul>
@@ -98,6 +99,15 @@
       <h1 id="choiceTitle">MANCHE GAGNÉE</h1>
       <p class="tag" id="choiceSub">Choisis une pièce</p>
       <div class="choices" id="choiceList"></div>
+    </div>
+  </div>
+
+  <div id="malus" class="panel hidden">
+    <div class="panel-inner">
+      <h1>⚠ PROTOCOLE FINAL</h1>
+      <p class="tag">Le boss impose sa règle pour tout le niveau</p>
+      <div class="malus-card" id="malusCard"></div>
+      <button id="malusBtn" class="primary">AFFRONTER LE BOSS</button>
     </div>
   </div>
 

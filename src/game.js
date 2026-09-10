@@ -48,8 +48,10 @@
   const MAX_ENERGY = 100;      // jauge SUPER : se remplit sur les bons coups, se vide sur un super smash
 
   /* --------------------------------------------------------------- roguelite */
-  const POINTS_TO_WIN = 5;     // manche courte : premier à 5 points
-  const ROUNDS_PER_LEVEL = 3;  // trois manches par niveau, une carte après chacune
+  // Un niveau se joue en 15 points contre le même adversaire. Le score se cumule :
+  // une carte est offerte à chaque palier, et le quinzième point ouvre l'adversaire suivant.
+  const CARD_STEPS = [5, 10, 15];
+  const LEVEL_TARGET = CARD_STEPS[CARD_STEPS.length - 1];
   const UP_MAX = 3;            // une amélioration se cumule trois fois au plus
 
   // Cartes : pièces du robot, tirées trois par trois après chaque manche gagnée.
@@ -66,6 +68,17 @@
     { key: 'reach',     icon: '📏', name: 'MANCHE ALLONGÉ', desc: (n) => `+${(0.18 * n).toFixed(2)} m d'allonge` },
     { key: 'precision', icon: '🎯', name: 'CORDAGE TENDU',  desc: (n) => `−${30 * n} % de dispersion` },
     { key: 'window',    icon: '🪶', name: 'TAMIS ÉLARGI',   desc: (n) => `+${Math.round(30 * n)} ms de fenêtre de frappe` },
+  ];
+
+  // Protocole du boss : un handicap tiré au sort pour le dernier niveau.
+  const HANDICAPS = [
+    { key: 'fast',    icon: '💨', name: 'VOLANT SURVOLTÉ',    desc: 'Le volant file 30 % plus vite' },
+    { key: 'slow',    icon: '🐌', name: 'SERVOS BRIDÉS',      desc: 'Ta course est ralentie de 25 %' },
+    { key: 'mono',    icon: '🌑', name: 'CAPTEUR MONOCHROME', desc: 'Le monde passe en noir et blanc' },
+    { key: 'sepia',   icon: '📜', name: 'ARCHIVE SÉPIA',      desc: 'Le monde passe en sépia' },
+    { key: 'flip',    icon: '🙃', name: 'GYROSCOPE INVERSÉ',  desc: 'Le terrain est à l\'envers' },
+    { key: 'dark',    icon: '🕶', name: 'PANNE DE LUMIÈRE',   desc: 'On ne voit que le volant et les raquettes' },
+    { key: 'nolines', icon: '🚫', name: 'LIGNES EFFACÉES',    desc: 'Le terrain n\'a plus aucune ligne' },
   ];
 
   /** Affiche un score qui peut être fractionnaire (carte Volant lesté). */
@@ -107,7 +120,7 @@
     /** Démarre une run complète : quatre niveaux de trois manches. */
     startRun(opts) {
       const start = DIFF_ORDER.indexOf(opts.difficulty);
-      this.run = { level: start > 0 ? start : 0, round: 0, cards: {}, racket: {}, points: 0, rounds: 0 };
+      this.run = { level: start > 0 ? start : 0, stage: 0, cards: {}, racket: {}, handicap: null, levels: 0 };
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
       this.runTime = 0;
@@ -116,15 +129,23 @@
 
     /** Manche suivante : même adversaire tant que le niveau n'est pas fini. */
     startRound() {
+      // Dernier niveau : le boss impose un protocole tiré au sort.
+      if (this.run.level >= DIFF_ORDER.length - 1 && !this.run.handicap) this.run.handicap = HANDICAPS[Math.floor(Math.random() * HANDICAPS.length)];
       this.startMatch({ chassis: this.chassisKey, difficulty: DIFF_ORDER[Math.min(this.run.level, DIFF_ORDER.length - 1)], assist: this.assist, keepRun: true });
     }
 
-    /** Passe à la manche ou au niveau suivant après le choix des cartes. */
+    /** Après le choix des cartes : on reprend le même match, ou on passe à l'adversaire suivant. */
     advance() {
-      if (this.run.round >= ROUNDS_PER_LEVEL - 1) { this.run.round = 0; this.run.level++; }
-      else this.run.round++;
-      this.startRound();
+      const r = this.run;
+      if (r.stage >= CARD_STEPS.length - 1) { r.stage = 0; r.level++; r.levels++; this.startRound(); }
+      else { r.stage++; this.winner = null; this.phase = null; this.setupServe(); }
     }
+
+    /** Palier de points à atteindre avant la prochaine carte. */
+    nextStep() { return CARD_STEPS[Math.min(this.run.stage, CARD_STEPS.length - 1)]; }
+    handicapIs(k) { return !!(this.run.handicap && this.run.handicap.key === k); }
+    /** Le volant survolté avance plus vite que le reste du jeu. */
+    shuttleRate() { return this.handicapIs('fast') ? 1.3 : 1; }
 
     /* --------------------------------------------------- améliorations acquises */
     cardLv(k) { return this.run.cards[k] || 0; }
@@ -152,7 +173,7 @@
       this.diffKey = opts.difficulty || 'rookie';
       this.diff = DIFFICULTY[this.diffKey];
       this.assist = !!opts.assist;
-      if (!opts.keepRun) this.run = { level: DIFF_ORDER.indexOf(this.diffKey), round: 0, cards: {}, racket: {}, points: 0, rounds: 0, solo: true };
+      if (!opts.keepRun) this.run = { level: Math.max(0, DIFF_ORDER.indexOf(this.diffKey)), stage: 0, cards: {}, racket: {}, handicap: null, levels: 0, solo: true };
       this.phase = null;
       this.robots = [makeRobot(-1, this.chassisKey, false), makeRobot(1, this.diff.chassis, true)];
       this.robots[1].color = this.diff.color; this.robots[1].accent = '#ffd6e6';
@@ -230,8 +251,9 @@
           this.serve(srv, btn === 'A' ? 'drop' : 'clear');
         }
       } else if (this.state === 'rally') {
-        const n = Math.max(1, Math.ceil(gdt / (1 / 120)));
-        const h = gdt / n;
+        const sdt = gdt * this.shuttleRate();
+        const n = Math.max(1, Math.ceil(sdt / (1 / 120)));
+        const h = sdt / n;
         for (let i = 0; i < n; i++) {
           s.px = s.x; s.py = s.y; s.pz = s.z;
           P.step(s, h);
@@ -347,8 +369,8 @@
     }
 
     speedOf(r) {
-      if (r.isAI) return (this.diff.reach ? this.diff.speed : this.diff.speed) * (1 + 0.04 * this.run.round);  // le bot durcit d'une manche à l'autre
-      return r.chassis.speed * (1 + 0.12 * this.cardLv('speed'));
+      if (r.isAI) return this.diff.speed * (1 + 0.04 * (this.run.stage || 0));   // le bot durcit d'un palier à l'autre
+      return r.chassis.speed * (1 + 0.12 * this.cardLv('speed')) * (this.handicapIs('slow') ? 0.75 : 1);
     }
     reachOf(r) {
       if (r.isAI) return this.diff.reach || r.chassis.reach;
@@ -666,7 +688,7 @@
           // Le geste est déclenché pour que sa fenêtre de contact tombe sur l'arrivée du volant.
           if (!ai.act && ai.swing <= 0 && s.z * side > -0.3) {
             const near = Math.hypot(target.x - ai.x, tz - ai.z) < this.reachOf(ai) * 2;
-            const start = (target.t - s.t) - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
+            const start = (target.t - s.t) / this.shuttleRate() - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
             if (near && start <= 0) this.startSwing(ai, ai.ai.shot, { depth: ai.ai.depth });
           }
         }
@@ -749,9 +771,8 @@
     }
 
     matchWinner() {
-      const [a, b] = this.score;
-      if (a >= POINTS_TO_WIN) return 0;
-      if (b >= POINTS_TO_WIN) return 1;
+      if (this.score[1] >= LEVEL_TARGET) return 1;
+      if (this.score[0] >= this.nextStep()) return 0;
       return -1;
     }
 
@@ -760,14 +781,12 @@
       if (w < 0) { this.setupServe(); return; }
       this.winner = w;
       this.state = 'end';
-      this.run.rounds++;
-      this.run.points += this.score[0];
-      if (w === 1) this.phase = 'lost';                                   // manche perdue : la run s'arrête
+      if (w === 1) this.phase = 'lost';                                   // le bot a atteint 15 : la run s'arrête
       else {
-        const lastRound = this.run.round >= ROUNDS_PER_LEVEL - 1;
+        const lastStep = this.run.stage >= CARD_STEPS.length - 1;
         const lastLevel = this.run.level >= DIFF_ORDER.length - 1;
-        this.pendingRacket = lastRound;
-        this.phase = (lastRound && lastLevel) ? 'won' : 'cards';
+        this.pendingRacket = lastStep;
+        this.phase = (lastStep && lastLevel) ? 'won' : 'cards';
       }
       this.events.push({ type: 'end', winner: w, phase: this.phase });
     }
@@ -781,5 +800,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, POINTS_TO_WIN, ROUNDS_PER_LEVEL, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);
