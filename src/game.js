@@ -1,16 +1,16 @@
-/* Rogue Shuttle — logique de jeu : robots, frappes, qualité, IA, score, Heat. */
+/* Rogue Shuttle — logique de jeu : robots, frappes, qualité, IA, score, jauge SUPER. */
 (function (root) {
   'use strict';
   const P = root.Physics;
   const COURT = P.COURT;
 
   const CHASSIS = {
-    light:    { key: 'light',    name: 'LIGHT',    speed: 7.6, accel: 80, smash: 0.85, heatMul: 1.35, cool: 5.0, reach: 1.20, color: '#5ef2ff', accent: '#b8fbff',
-                desc: ['🟢 rapide', '🔴 chauffe vite', '🔴 smash faible'] },
-    balanced: { key: 'balanced', name: 'BALANCED', speed: 6.4, accel: 70, smash: 1.0,  heatMul: 1.0,  cool: 6.5, reach: 1.25, color: '#7dff9a', accent: '#d6ffe0',
+    light:    { key: 'light',    name: 'LIGHT',    speed: 7.6, accel: 80, smash: 0.85, energyMul: 1.2,  reach: 1.20, color: '#5ef2ff', accent: '#b8fbff',
+                desc: ['🟢 rapide', '🟢 charge vite', '🔴 smash faible'] },
+    balanced: { key: 'balanced', name: 'BALANCED', speed: 6.4, accel: 70, smash: 1.0,  energyMul: 1.0,  reach: 1.25, color: '#7dff9a', accent: '#d6ffe0',
                 desc: ['⚪ tout moyen'] },
-    heavy:    { key: 'heavy',    name: 'HEAVY',    speed: 5.4, accel: 55, smash: 1.25, heatMul: 0.75, cool: 9.0, reach: 1.35, color: '#ffb35e', accent: '#ffe0b8',
-                desc: ['🟢 énorme smash', '🟢 refroidissement', '🔴 lent'] },
+    heavy:    { key: 'heavy',    name: 'HEAVY',    speed: 5.4, accel: 55, smash: 1.25, energyMul: 0.85, reach: 1.35, color: '#ffb35e', accent: '#ffe0b8',
+                desc: ['🟢 énorme smash', '🔴 charge lente', '🔴 lent'] },
   };
 
   const DIFFICULTY = {
@@ -26,8 +26,12 @@
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
-  const TAP_TIME = 0.14;       // temps mort : relâcher avant = frappe rapide, la charge n'a pas commencé
-  const CHARGE_TIME = 0.36;    // maintenir A jusque-là (temps mort inclus) = smash préparé
+  const TAP_TIME = 0.10;       // temps mort avant que la charge du smash ne démarre
+  const CHARGE_TIME = 0.42;    // maintenir A jusque-là : smash prêt, le robot brille
+  // Le coup part au relâchement du bouton : la raquette balaie et ne touche que dans sa fenêtre de contact.
+  const SWING_TIME = 0.30;
+  const SWING_HIT0 = 0.04;
+  const SWING_HIT1 = 0.20;
   const JUMP_REACH = 3.3;      // hauteur max atteignable en sautant pour smasher
   const JUMP_TIME = 0.45;
   // Plongeon (sauvetage) : détente rapide avec allonge, puis un temps au sol avant de se relever.
@@ -40,8 +44,7 @@
   const DIVE_MIN_SPEED = 1.5;  // il faut être lancé pour plonger
   const DIVE_RANGE = 2.7;      // distance maximale rattrapable en plongeant
 
-  const MAX_HEAT = 100;
-  const OVERHEAT_TIME = 3.0;
+  const MAX_ENERGY = 100;      // jauge SUPER : se remplit sur les bons coups, se vide sur un super smash
 
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -50,10 +53,10 @@
     return {
       side, isAI, chassis: CHASSIS[chassisKey], color: CHASSIS[chassisKey].color, accent: CHASSIS[chassisKey].accent,
       x: 0, z: side * 3.5, vx: 0, vz: 0, moveX: 0, moveZ: 0, walk: 0,
-      heat: 0, overheat: 0, overheats: 0,
-      armed: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0, dive: null,
-      stats: { hits: 0, perfect: 0, smashes: 0, maxHeat: 0 },
-      ai: { reactAt: 0, shot: null, noiseX: 0, judgedOut: false, target: null },
+      energy: 0,
+      hold: null, act: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0, dive: null,
+      stats: { hits: 0, perfect: 0, smashes: 0, supers: 0, whiffs: 0 },
+      ai: { reactAt: 0, shot: null, noiseX: 0, judgedOut: false, willDive: false, swingErr: 0 },
     };
   }
 
@@ -102,8 +105,8 @@
       const srv = this.server, rcv = this.other(srv);
       const even = this.score[srv === this.robots[0] ? 0 : 1] % 2 === 0;
       const serverX = -srv.side * (even ? 1 : -1) * 1.1;
-      srv.x = serverX; srv.z = srv.side * 3.2; srv.vx = srv.vz = 0; srv.armed = null; srv.dive = null;
-      rcv.x = -serverX; rcv.z = rcv.side * 3.6; rcv.vx = rcv.vz = 0; rcv.armed = null; rcv.dive = null;
+      srv.x = serverX; srv.z = srv.side * 3.2; srv.vx = srv.vz = 0; srv.hold = srv.act = null; srv.dive = null;
+      rcv.x = -serverX; rcv.z = rcv.side * 3.6; rcv.vx = rcv.vz = 0; rcv.hold = rcv.act = null; rcv.dive = null;
       this.serveBoxSign = Math.sign(rcv.x) || 1;
       const s = this.shuttle;
       s.x = srv.x + 0.15 * (-srv.side); s.y = 1.0; s.z = srv.z - srv.side * 0.45;
@@ -132,10 +135,10 @@
       for (const r of this.robots) {
         if (r.dive) {
           r.dive.t += dt;
-          if (r.dive.t >= DIVE_LUNGE && r.armed) r.armed = null;   // la détente passée, on ne frappe plus
+          if (r.dive.t >= DIVE_LUNGE && r.act) r.act = null;   // la détente passée, on ne frappe plus
           if (r.dive.t >= DIVE_TOTAL) r.dive = null;
         }
-        this.moveRobot(r, gdt); this.updateHeat(r, dt);
+        this.moveRobot(r, gdt);
         if (r.swing > 0) r.swing -= dt;
         if (r.jumpT > 0) r.jumpT -= dt;
       }
@@ -174,6 +177,12 @@
         if (this.pointTimer <= 0) this.nextRally();
       }
 
+      // Un coup dont la fenêtre de contact est passée sans toucher : frappe dans le vide.
+      for (const r of this.robots) {
+        const a = r.act;
+        if (a && !a.dive && this.time - a.t0 > SWING_HIT1) this.whiff(r);
+      }
+
       for (const f of this.fx) f.t += dt;
       this.fx = this.fx.filter((f) => f.t < f.life);
       this.shake = Math.max(0, this.shake - dt);
@@ -193,42 +202,61 @@
       p.aimX = mx;
       p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
       if (p.dive) { p.moveX = 0; p.moveZ = 0; return; }        // plongeon en cours : plus aucune commande
-      if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
-      // Une pression arme la raquette et mémorise la direction affichée (elle servira si c'est une frappe rapide).
+      if (this.state !== 'rally') { p.hold = null; p.act = null; p.moveX = mx; p.moveZ = mz; return; }
+      p.moveX = mx; p.moveZ = mz;
+
+      // Une pression n'arme rien : soit elle déclenche un plongeon, soit elle commence à charger.
       for (const btn of input.just) {
         if (btn !== 'A' && btn !== 'B') continue;
         const t = this.diveTarget(p);
-        if (t) { this.startDive(p, t.x, t.z, { btn, t0: this.time, released: this.time, ax: mx, dz: mz, dive: true, lastD: null }); return; }
-        p.armed = { btn, t0: this.time, released: null, ax: mx, dz: mz, lastD: null };
+        if (t) { this.startDive(p, t.x, t.z); p.hold = null; return; }
+        p.hold = { btn, t0: this.time };
       }
-      if (p.armed && p.armed.released === null && !input.held[p.armed.btn]) p.armed.released = this.time;
-      // Maintenu : le robot se fige et la croix oriente la frappe. Relâché : la frappe reste en attente et on court.
-      if (p.armed && p.armed.released === null) { p.moveX = 0; p.moveZ = 0; } else { p.moveX = mx; p.moveZ = mz; }
+      // Le coup part au relâchement : smash si la charge est pleine, sinon coup normal.
+      if (p.hold && !input.held[p.hold.btn]) {
+        const h = p.hold; p.hold = null;
+        if (!p.act && p.swing <= 0) {
+          const charged = h.btn === 'A' && this.time - h.t0 >= CHARGE_TIME;
+          this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, dirZ: mz });
+        }
+      }
+      // Charger alourdit le robot sans le clouer sur place : c'est le prix du smash.
+      if (p.hold && this.time - p.hold.t0 >= TAP_TIME) { p.moveX *= 0.45; p.moveZ *= 0.45; }
     }
 
-    /** Traduit bouton + croix + hauteur du volant en type de frappe (schéma Game Boy). */
-    resolveShot(btn, charged, dirZ, y) {
-      const up = dirZ > 0.5;
-      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';   // bas = court, haut ou neutre = long
-      if (charged && y >= 1.75) return 'smash';   // seule frappe qui demande une préparation
-      return up ? 'drop' : 'drive';
+    /** Traduit bouton + croix en type de frappe (le smash est traité à part, par la charge). */
+    resolveShot(btn, dirZ) {
+      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';   // bas = dégagé court, sinon long
+      return dirZ > 0.5 ? 'drop' : 'drive';                       // haut = amorti, sinon drive
     }
 
-    /** Progression de la préparation du smash (0 à 1), ou −1 si le robot ne prépare rien.
-     *  Rien ne se charge pendant le temps mort : un bouton tapé part en frappe rapide. */
+    /** Progression de la charge du smash (0 à 1), ou −1 si le robot ne charge pas. */
     chargeOf(r) {
-      const a = r.armed;
-      if (!a) return -1;
-      const wantsSmash = r.isAI ? a.shot === 'smash' : (a.btn === 'A' && a.released === null);
-      if (!wantsSmash) return -1;
-      const held = this.time - a.t0;
+      const h = r.hold;
+      if (!h || h.btn !== 'A') return -1;
+      const held = this.time - h.t0;
       if (held < TAP_TIME) return -1;
       return clamp((held - TAP_TIME) / (CHARGE_TIME - TAP_TIME), 0, 1);
     }
 
-    /** Un robot dont le smash est prêt peut sauter pour aller chercher un volant plus haut. */
-    smashReady(r) {
-      return this.chargeOf(r) >= 1 && r.overheat <= 0;
+    /** Lance un coup de raquette. Il ne touchera que si le volant passe dans sa fenêtre de contact. */
+    startSwing(r, shot, opt) {
+      opt = opt || {};
+      r.act = { shot, t0: this.time, aim: opt.aim || 0, dirZ: opt.dirZ || 0, dive: !!opt.dive, lastD: null };
+      r.swing = SWING_TIME; r.swingShot = shot; r.swingLevel = 1;
+      this.events.push({ type: 'swing', robot: r, shot });
+    }
+
+    /** Coup dans le vide : la fenêtre s'est refermée sans contact. */
+    whiff(r) {
+      const shot = r.act.shot;
+      r.act = null;
+      r.stats.whiffs++;
+      this.events.push({ type: 'whiff', robot: r, shot });
+      const s = this.shuttle;
+      // On ne le signale que si le volant était vraiment à côté : sinon c'est juste une frappe anticipée.
+      if (!r.isAI && s.z * r.side > -0.5 && Math.hypot(s.x - r.x, s.z - r.z) < 3)
+        this.addFx('DANS LE VIDE', r.x, 1.9, r.z, '#9aa4c0', 0.7, 15);
     }
 
     speedOf(r) { return r.isAI ? this.diff.speed : r.chassis.speed; }
@@ -273,20 +301,19 @@
     }
 
     /** Détente vers (tx, tz) : le robot glisse, frappe s'il touche, puis reste au sol. */
-    startDive(r, tx, tz, arm) {
+    startDive(r, tx, tz) {
       const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz) || 1;
       // La détente est calibrée sur la distance à couvrir : un plongeon court ne projette pas le robot au bout du terrain.
       const maxS = this.speedOf(r);
       const sp = clamp(d / (0.7 * DIVE_LUNGE), maxS, maxS * DIVE_SPEED);
       r.dive = { t: 0, dx: dx / d, dz: dz / d, sp };
-      r.armed = arm;
+      this.startSwing(r, 'clear', { dive: true });
       r.vx = dx / d * sp; r.vz = dz / d * sp;
       this.events.push({ type: 'dive', robot: r });
     }
 
     moveRobot(r, dt) {
       let maxS = this.speedOf(r);
-      if (r.overheat > 0) maxS *= 0.7;
       if (r.dive) {
         const d = r.dive;
         if (d.t < DIVE_LUNGE) {
@@ -311,25 +338,11 @@
       r.walk += Math.hypot(r.vx, r.vz) * dt * 2.2;
     }
 
-    updateHeat(r, dt) {
-      if (r.overheat > 0) {
-        r.overheat -= dt;
-        r.heat = Math.max(40, r.heat - 20 * dt);
-      } else {
-        r.heat = Math.max(0, r.heat - r.chassis.cool * dt);
-      }
-      r.stats.maxHeat = Math.max(r.stats.maxHeat, r.heat);
-    }
-
-    addHeat(r, amount) {
-      if (r.overheat > 0) return;
-      r.heat = clamp(r.heat + amount * r.chassis.heatMul, 0, MAX_HEAT);
-      if (r.heat >= MAX_HEAT) {
-        r.overheat = OVERHEAT_TIME;
-        r.overheats++;
-        this.events.push({ type: 'overheat', robot: r });
-        this.addFx('⚠ OVERHEAT', r.x, 2.2, r.z, '#ff3b3b', 1.4, 30);
-      }
+    /** La jauge SUPER monte sur les bons coups : placement parfait, smash, sauvetage. */
+    addEnergy(r, amount) {
+      const before = r.energy;
+      r.energy = clamp(r.energy + amount * r.chassis.energyMul, 0, MAX_ENERGY);
+      if (before < MAX_ENERGY && r.energy >= MAX_ENERGY) this.events.push({ type: 'full', robot: r });
     }
 
     /* ------------------------------------------------------------------ service */
@@ -354,7 +367,7 @@
       this.serveInFlight = true;
       this.state = 'rally';
       this.message = null;
-      srv.swing = 0.3; srv.swingShot = 'serve'; srv.swingLevel = 1;
+      srv.swing = SWING_TIME; srv.swingShot = 'serve'; srv.swingLevel = 1;
       srv.stats.hits++;
       this.onHitFor(this.other(srv));
       this.events.push({ type: 'hit', shot: 'serve', level: 1, robot: srv });
@@ -364,50 +377,46 @@
     checkContacts() {
       const s = this.shuttle;
       for (const r of this.robots) {
-        if (!r.armed || this.lastHitter === r) continue;
-        if (s.z * r.side < -0.25) { r.armed.lastD = null; continue; }
+        const a = r.act;
+        if (!a || this.lastHitter === r) continue;
+        const age = this.time - a.t0;
+        if (a.dive) { if (r.dive && r.dive.t > DIVE_LUNGE) continue; }
+        else if (age < SWING_HIT0 || age > SWING_HIT1) continue;   // hors de la fenêtre de contact
+        if (s.z * r.side < -0.25) { a.lastD = null; continue; }
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const maxY = this.smashReady(r) ? JUMP_REACH : 2.6;
-        let reach = this.reachOf(r);                                    // deux raquettes = plus d'allonge
-        if (r.dive) reach += DIVE_REACH;                                // en pleine détente, on va chercher loin
+        const maxY = a.shot === 'smash' ? JUMP_REACH : 2.6;
+        let reach = this.reachOf(r);
+        if (r.dive) reach += DIVE_REACH;
         const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
-        if (!inReach) { r.armed.lastD = null; continue; }
-        const a = r.armed;
+        if (!inReach) { a.lastD = null; continue; }
         const closest = a.lastD !== null && d >= a.lastD;
         const passing = (s.z - r.z) * r.side > 0.3;
         const low = s.y < 0.25;
+        const ending = !a.dive && age >= SWING_HIT1 - 0.03;        // dernière chance avant la fin du geste
         a.lastD = d;
-        if (d <= 0.22 || closest || passing || low) { this.hit(r, d); return; }
+        if (d <= 0.25 || closest || passing || low || ending) { this.hit(r, d); return; }
       }
     }
 
     hit(r, d) {
       const s = this.shuttle;
-      const a = r.armed; r.armed = null;
+      const a = r.act; r.act = null; r.hold = null;
       const place = d <= 0.6 ? 2 : d <= 1.05 ? 1 : 0;
-      const held = a.released === null;
-      const charged = held && (this.time - a.t0) >= CHARGE_TIME;
-      // Frappe rapide : on rejoue la direction qu'affichait la croix au moment de la pression.
-      const aim = held ? (r.aimX || 0) : a.ax;
-      const dirZ = held ? (r.dirZ || 0) : a.dz;
-      let level = place;                       // la qualité ne dépend que du placement…
+      let level = place;                       // la qualité tient au placement ; le timing décide déjà si on touche
       if (r.isAI) level = this.aiLevel(level);
 
-      let shot = r.isAI ? a.shot : this.resolveShot(a.btn, charged, dirZ, s.y);
-      let note = null;
-      if (a.dive) {
-        shot = 'clear'; level = Math.min(level, 1); note = 'SAUVETAGE!';           // plongeon : on remet haut, sans plus
-      } else {
-        if (shot === 'smash' && !charged) { shot = 'drive'; note = 'PRÉCIPITÉ'; }  // …sauf le smash, qui exige la préparation
-        else if (!r.isAI && a.btn === 'A' && held && s.y >= 1.75 && this.time - a.t0 >= TAP_TIME) note = 'PRÉCIPITÉ';
-        if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
-      }
+      let shot = a.shot, note = null;
+      if (a.dive) { shot = 'clear'; level = Math.min(level, 1); note = 'SAUVETAGE!'; }
+      else if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS'; }
       const jump = shot === 'smash' && s.y > 2.5;
-      if (jump) { r.jumpT = JUMP_TIME; note = 'JUMP SMASH!'; }
+      const sup = shot === 'smash' && r.energy >= MAX_ENERGY;
+      if (sup) { r.energy = 0; r.stats.supers++; level = 2; note = 'SUPER SMASH!'; }
+      else if (jump) note = 'JUMP SMASH!';
+      if (jump) r.jumpT = JUMP_TIME;
 
-      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : aim);
+      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : a.aim, sup);
       if (jump && spec.mode === 'speed') spec.speed *= 1.1;
       spec.from = { x: s.x, y: s.y, z: s.z };
       const plan = P.planShot(spec);
@@ -419,22 +428,30 @@
       this.rallyHits++;
       this.longestRally = Math.max(this.longestRally, this.rallyHits);
 
-      r.swing = 0.3; r.swingShot = shot; r.swingLevel = level;
+      r.swing = SWING_TIME; r.swingShot = shot; r.swingLevel = level;
       r.stats.hits++;
       if (level === 2) r.stats.perfect++;
-      if (shot === 'smash') { r.stats.smashes++; this.addHeat(r, level === 0 ? 8 : 15); if (level === 2) { this.shake = Math.max(this.shake, 0.22); this.hitStop = 0.07; } }
-      else if (shot === 'drive') this.addHeat(r, 5);
-      else if (shot === 'drop') this.addHeat(r, -6);
-      else if (shot === 'clear') this.addHeat(r, -4);
-      else if (shot === 'attack') this.addHeat(r, 0);
+      if (shot === 'smash') r.stats.smashes++;
+
+      if (sup) { this.shake = Math.max(this.shake, 0.35); this.hitStop = 0.11; }
+      else {
+        // la jauge monte sur ce qui est bien joué
+        let gain = [0, 1, 3][level];
+        if (shot === 'smash') gain += 3;
+        if (jump) gain += 2;
+        if (a.dive) gain += 5;
+        this.addEnergy(r, gain);
+        if (shot === 'smash' && level === 2) { this.shake = Math.max(this.shake, 0.22); this.hitStop = 0.07; }
+      }
 
       const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : SHOT_NAMES[shot]);
-      this.addFx(label, s.x, s.y + 0.3, s.z, jump ? '#f8f8f0' : LEVEL_COLORS[level], r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
-      this.events.push({ type: 'hit', shot, level, robot: r });
+      const color = sup ? '#f8d848' : (a.dive || jump) ? '#f8f8f0' : LEVEL_COLORS[level];
+      this.addFx(label, s.x, s.y + 0.3, s.z, color, r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
+      this.events.push({ type: 'hit', shot, level, robot: r, sup });
       this.onHitFor(this.other(r));
     }
 
-    shotSpec(r, shot, level, aim) {
+    shotSpec(r, shot, level, aim, sup) {
       const s = this.shuttle;
       const far = -r.side;
       const opp = this.other(r);
@@ -471,6 +488,7 @@
           break;
         }
         case 'smash': {
+          if (sup) { spec = { mode: 'speed', speed: 34 * r.chassis.smash, target: { x: tx, z: far * 2.9 }, clearance: 0.08 }; break; }
           if (level === 0) {
             spec = { mode: 'angle', angle: 18, target: { x: tx, z: far * 4.8 }, clearance: 0.45 };
           } else {
@@ -505,6 +523,7 @@
       const out = this.pred && !this.pred.net && !P.inSingles(this.pred.landing.x, this.pred.landing.z, -0.1);
       r.ai.judgedOut = out && Math.random() < d.judge;
       r.ai.willDive = Math.random() < (d.dive || 0);   // décidé une fois par échange, pas à chaque image
+      r.ai.swingErr = rnd(-1, 1) * d.errorRate * 0.35; // décalage du geste : c'est ce qui fait rater le bot
       r.ai.target = null;
     }
 
@@ -532,13 +551,17 @@
           tx = target.x + ai.ai.noiseX;
           tz = target.z + side * SWEET;
           if (!ai.ai.shot) ai.ai.shot = this.aiChooseShot(ai, target);
-          const dToSweet = Math.hypot(s.x - ai.x, s.z - (ai.z - side * SWEET));
-          if (!ai.armed && s.z * side > -0.3 && dToSweet < 3.2) ai.armed = { shot: ai.ai.shot, t0: this.time, lastD: null };
+          // Le geste est déclenché pour que sa fenêtre de contact tombe sur l'arrivée du volant.
+          if (!ai.act && ai.swing <= 0 && s.z * side > -0.3) {
+            const near = Math.hypot(target.x - ai.x, tz - ai.z) < this.reachOf(ai) * 2;
+            const start = (target.t - s.t) - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
+            if (near && start <= 0) this.startSwing(ai, ai.ai.shot);
+          }
         }
       } else {
         // repli : légèrement du côté où se trouve le volant
         if (this.state === 'rally' && this.lastHitter === ai && this.pred) tx = clamp(this.pred.landing.x * 0.25, -0.8, 0.8);
-        if (ai.armed && !incoming) ai.armed = null;
+        if (ai.act && !incoming && !ai.act.dive) ai.act = null;
       }
 
       const dx = tx - ai.x, dz = tz - ai.z;
@@ -554,8 +577,8 @@
       const d = this.diff;
       const h = p.y, depth = Math.abs(p.z);
       const r = Math.random();
-      const canSmash = ai.heat < 85 && h >= 1.9 && depth <= 5.2;
-      if (canSmash && r < d.aggression) return 'smash';
+      const canSmash = h >= 1.9 && depth <= 5.2;
+      if (canSmash && (ai.energy >= MAX_ENERGY || r < d.aggression)) return 'smash';
       if (h >= 1.9) return r < 0.45 ? 'drop' : r < 0.75 ? 'clear' : 'attack';
       if (h >= 1.15) return r < 0.35 ? 'drive' : r < 0.65 ? 'clear' : r < 0.85 ? 'attack' : 'drop';
       if (depth < 2.6) return r < 0.5 ? 'drop' : 'clear';
@@ -605,7 +628,7 @@
       this.pointTimer = 1.5;
       this.pointWinner = winner;
       this.server = winner;
-      for (const r of this.robots) r.armed = null;
+      for (const r of this.robots) { r.hold = null; r.act = null; }
       const good = idx === 0;
       this.message = { text: reason, sub: good ? 'Point pour toi' : 'Point pour le bot', t: 0, good };
       this.events.push({ type: 'point', winner: idx, reason });
@@ -638,5 +661,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, JUMP_TIME, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

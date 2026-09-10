@@ -11,27 +11,29 @@ Cette version est le **prototype de concept** : un match, premier à 15, sans le
 
 ## Contrôles (schéma Game Boy)
 
+Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal calé, on frappe dans le vide.
+
 | Entrée | Action |
 | --- | --- |
-| Croix | Déplacement 8 directions. Gauche/droite au moment de la frappe oriente le volant |
-| **A** (tapé) | Drive (tendu, rapide) ; la frappe reste en attente sans bloquer la course |
-| **A tapé + croix vers le haut** | Amorti (près du filet) |
-| **A maintenu** (préparation) | La charge démarre après un temps mort de 0,14 s. Pleine à 0,36 s : smash si le volant est haut, jump smash s'il est très haut |
-| **B** (tapé) | Dégagé long (haut, au fond) |
-| **B tapé + croix vers le bas** | Dégagé court (tendu, mi-court) |
-| Maintenir un bouton | Immobilise le robot ; la croix sert alors à orienter le coup. Seul le smash demande une préparation |
-| Taper un bouton | Coup rapide : direction figée à la pression, robot libre de continuer à courir |
-| A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol avant de se relever |
+| Croix | Déplacement 8 directions. La direction au relâchement oriente le coup |
+| **A** | Drive (tendu, rapide) |
+| **A + croix vers le haut** | Amorti (près du filet) |
+| **A maintenu** | Charge le smash : barre sous le robot, puis lueur blanche quand il est prêt. Relâché au bon moment il smashe, sinon il rate le volant |
+| **B** | Dégagé long (haut, au fond) |
+| **B + croix vers le bas** | Dégagé court (tendu, mi-court) |
+| Charger | Ralentit le robot à 45 % de sa vitesse |
+| A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
 ## Systèmes du concept déjà présents
 
+- **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et une fois sur trois c'est une faute.
-  Le **smash** est le seul coup à préparer : A maintenu 0,36 s avant l'impact, sinon drive précipité. Volant au-dessus de 2,5 m = jump smash.
+  Le **smash** demande une charge de 0,42 s et un volant à plus de 1,75 m ; au-dessus de 2,5 m le robot saute.
 - **Hauteur du volant** : vraie trajectoire avec traînée aérodynamique ; dégagé, drive, amorti, smash ont des formes différentes.
-- **Heat** : smash +15, drive +5, amorti −6, dégagé −4, refroidissement passif. À 100 → Overheat (−30 % vitesse, 3 s).
-- **Châssis** : Light / Balanced / Heavy (vitesse, smash, chauffe, refroidissement, allonge).
+- **Jauge SUPER** : monte sur les coups bien placés (+3 pour un parfait), les smashs (+3), les sauts (+2) et les sauvetages (+5). Pleine, le robot s'auréole et son prochain smash devient un **SUPER SMASH** foudroyant qui vide la jauge.
+- **Châssis** : Light / Balanced / Heavy (vitesse, puissance de smash, vitesse de charge de la jauge, allonge).
 - **Plongeon** : déclenché à la pression quand le point d'interception est hors de portée en courant, à moins de 2,7 m et à moins de 0,9 s. Détente de 0,30 s avec 0,85 m d'allonge en plus, puis 0,67 s d'immobilisation. L'IA plonge aussi, d'autant plus souvent que son niveau est élevé.
 - **Match à 15**, deux points d'écart, plafond 20, service par le gagnant de l'échange.
 - **IA** : Rookie / Pro / Elite / Boss (vitesse, réaction, agressivité, taux d'erreur) et **tempo** du jeu : robots et volant plus lents en Rookie, plus rapides en Elite.

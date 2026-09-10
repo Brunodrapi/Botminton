@@ -137,6 +137,21 @@
       return c;
     }
 
+    /** Copie blanche de l'atlas : sert à faire briller un robot (charge prête, jauge pleine). */
+    silhouette(sheet) {
+      const a = this.atlases[sheet];
+      if (!a) return null;
+      if (a.glow) return a.glow;
+      const c = document.createElement('canvas'); c.width = a.img.width; c.height = a.img.height;
+      const ctx = c.getContext('2d');
+      ctx.drawImage(a.img, 0, 0);
+      const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data;
+      for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 128) { d[i] = 255; d[i + 1] = 255; d[i + 2] = 245; } }
+      ctx.putImageData(id, 0, 0);
+      a.glow = c;
+      return c;
+    }
+
     buildShuttleFrames() {
       const a = this.atlases['rg-b1'];
       const f = a.frames.shuttle;
@@ -300,10 +315,11 @@
     }
 
     drawSweet(r) {
-      if (!r.armed) return;
+      const st = r.hold || r.act;
+      if (!st) return;
       const b = this.bctx;
       const p = this.px(r.x, 0, r.z - r.side * RS.SWEET);
-      b.fillStyle = SHOT_COLORS[r.armed.shot] || (r.armed.btn === 'B' ? SHOT_COLORS.clear : SHOT_COLORS.drive);
+      b.fillStyle = SHOT_COLORS[st.shot] || (st.btn === 'B' ? SHOT_COLORS.clear : SHOT_COLORS.drive);
       b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 2, 1, 5);
     }
 
@@ -353,7 +369,7 @@
         else if (sh === 'drive') name = swingU < 0.55 ? 'hit_mid' : 'follow';
         else name = swingU < 0.55 ? 'hit_high' : 'follow';
         flip = !front;                              // joueur : raquette côté droit
-      } else if (r.armed) {
+      } else if (r.hold) {
         name = game.chargeOf(r) >= 0 ? 'smash_prep' : 'prep';
         flip = !front;
       } else if (game.state === 'serve' && game.server === r) {
@@ -396,21 +412,32 @@
       }
 
       const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 14) : 0;
-      let bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
+      let bob = (!r.hold && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
       if (r.hover) bob += Math.round(Math.sin(this.time * 6) * 1.5) + 2;   // vol stationnaire
       const { name, flip } = this.robotPose(r, game);
       const src = this.tinted(sheet, r.tint ? r.color : null);
-      if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;
-      this.drawSprite(sheet, name, p.x, p.y - jump - bob, flip, src);
-      b.globalAlpha = 1;
-
-      // barre de préparation du smash (joueur) : n'apparaît qu'une fois le temps mort passé
-      const k = r.isAI ? -1 : game.chargeOf(r);
-      if (k >= 0) {
-        b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
-        b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * k), 2);
+      const sy = p.y - jump - bob;
+      const charge = game.chargeOf(r);
+      // Jauge SUPER pleine : aura discrète. Smash chargé à bloc : le robot clignote en blanc.
+      if (r.energy >= RS.MAX_ENERGY) {
+        const g = this.silhouette(sheet);
+        b.save(); b.globalAlpha = 0.18 + 0.14 * Math.sin(this.time * 7);
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) this.drawSprite(sheet, name, p.x + dx, sy + dy, flip, g);
+        b.restore();
       }
-      if (r.overheat > 0) this.text('HOT!', p.x, p.y - 44, '#f83030', 8, true);
+      this.drawSprite(sheet, name, p.x, sy, flip, src);
+      if (charge >= 1 && Math.floor(this.time * 12) % 2) {
+        const g = this.silhouette(sheet);
+        b.save(); b.globalAlpha = 0.75;
+        this.drawSprite(sheet, name, p.x, sy, flip, g);
+        b.restore();
+      }
+
+      // barre de charge du smash (joueur) : n'apparaît qu'une fois le temps mort passé
+      if (!r.isAI && charge >= 0) {
+        b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
+        b.fillStyle = charge >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * charge), 2);
+      }
     }
 
     text(str, x, y, color, size, center, outline) {

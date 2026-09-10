@@ -53,6 +53,7 @@
       switch (e.type) {
         case 'hit': {
           const lvl = e.level;
+          if (e.sup) { this.burst(260, 0.3, 1.0, 0.5); this.tone(90, 0.34, 'sawtooth', 0.5, 0, 40); [1319, 1047, 784].forEach((f, i) => this.tone(f, 0.12, 'square', 0.16, i * 0.05)); break; }
           if (e.shot === 'smash') { this.burst(500, 0.12, 0.8, 0.6); this.tone(220, 0.16, 'square', 0.25, 0, 70); }
           else if (e.shot === 'drive') { this.tone(660, 0.07, 'square', 0.18, 0, 440); }
           else if (e.shot === 'drop') { this.tone(1200, 0.06, 'square', 0.12, 0, 900); }
@@ -71,8 +72,12 @@
           this.tone(300, 0.16, 'triangle', 0.12, 0, 120);
           break;
         }
-        case 'overheat': {
-          for (let i = 0; i < 4; i++) this.tone(110, 0.1, 'square', 0.15, i * 0.13);
+        case 'whiff': {
+          this.burst(1800, 0.12, 0.22, 0.6);           // la raquette fend l'air
+          break;
+        }
+        case 'full': {
+          [784, 988, 1319].forEach((f, i) => this.tone(f, 0.14, 'square', 0.13, i * 0.07));
           break;
         }
         case 'end': {

@@ -50,7 +50,7 @@ button { font-family: inherit; }
 .heat-bar i { display: block; width: 12px; height: 10px; background: var(--ink-soft); border: 1px solid var(--paper-dark); }
 .heat-bar.bot i { height: 4px; width: 10px; }
 .heat-bar i.on { background: var(--cyan); } .heat-bar i.on.warm { background: var(--yellow); } .heat-bar i.on.hot { background: var(--red); }
-.heat-bar.overheat i.on { background: var(--red); animation: blink 0.2s steps(1) infinite alternate; }
+.heat-bar.full i.on { background: var(--yellow); animation: blink 0.25s steps(1) infinite alternate; }
 @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
 #pauseBtn {
   pointer-events: auto; position: absolute; right: 8px; top: 56px; width: 28px; height: 22px;
@@ -138,4 +138,4 @@ ul.help li { margin-bottom: 6px; }
 .q.red { background: var(--red); } .q.yellow { background: var(--yellow); } .q.green { background: var(--green); }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 14px 0 4px; font-size: 7px; }
 .stats b { float: right; font-weight: normal; }
-@media (prefers-reduced-motion: reduce) { .heat-bar.overheat i.on { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .heat-bar.full i.on { animation: none; } }

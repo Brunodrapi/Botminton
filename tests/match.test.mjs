@@ -8,34 +8,40 @@ vm.createContext(ctx);
 for (const f of ['physics.js', 'game.js']) vm.runInContext(readFileSync(new URL('../src/' + f, import.meta.url), 'utf8'), ctx);
 const RS = ctx.RogueShuttle, P = ctx.Physics;
 
+let pressed = null;    // bouton maintenu par le joueur scripté (relâché à l'image suivante)
+
 function scriptedInput(game, skill) {
-  // Contrôleur simple pour le joueur humain : va vers le point d'interception, arme une frappe au bon moment.
+  // Contrôleur simple : rejoint le point d'interception, appuie puis relâche à l'image suivante
+  // pour que la fenêtre de contact tombe sur l'arrivée du volant.
   const p = game.player, s = game.shuttle;
   const held = {}, just = [];
   let stick = { x: 0, y: 0 };
+  const release = () => { pressed = null; return { stick, held, just }; };
+
   if (game.state === 'serve' && game.server === p) {
-    just.push(Math.random() < 0.5 ? 'A' : 'B');
+    if (pressed) return release();
+    const b = Math.random() < 0.5 ? 'A' : 'B';
+    just.push(b); pressed = b; held[b] = true;
     return { stick, held, just };
   }
-  if (game.state === 'rally' && game.lastHitter !== p && game.pred) {
-    let target = null;
-    for (const q of game.pred.path) {
-      if (q.t <= s.t || q.z > -0.35 || q.y > 2.3 || q.y < 0.15) continue;
-      if (q.vy > 0 && q.y > 0.9) continue;
-      target = q; break;
-    }
-    if (!target) target = game.pred.landing;
+  if (game.state !== 'rally' || p.dive) return release();
+
+  if (game.lastHitter !== p && game.pred) {
+    const info = game.interceptInfo(p);
+    const target = info ? info.point : game.pred.landing;
     const tx = target.x + (Math.random() - 0.5) * (1 - skill) * 1.2, tz = target.z - RS.SWEET;
     const dx = tx - p.x, dz = tz - p.z, d = Math.hypot(dx, dz);
     if (d > 0.05) stick = { x: dx / d * Math.min(1, d / 0.3), y: dz / d * Math.min(1, d / 0.3) };
-    const near = Math.hypot(s.x - p.x, s.z - (p.z + RS.SWEET)) < 1.6 && s.z < 0.3;
-    if (near) {
-      const btn = s.y > 1.9 ? (Math.random() < 0.7 ? 'A' : 'B') : s.y > 1.1 ? 'A' : 'B';
-      if (!p.armed) just.push(btn);
-      held[p.armed ? p.armed.btn : btn] = true;
+    if (pressed) return release();
+    const tContact = (target.t || 0) - s.t;
+    const mid = (RS.SWING_HIT0 + RS.SWING_HIT1) / 2;
+    if (!p.act && p.swing <= 0 && tContact <= mid + 0.02 && tContact > -0.05) {
+      const b = s.y > 1.1 ? 'A' : 'B';
+      just.push(b); pressed = b; held[b] = true;
     }
+    return { stick, held, just };
   }
-  return { stick, held, just };
+  return release();
 }
 
 let fails = 0;

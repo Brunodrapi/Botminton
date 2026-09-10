@@ -36,21 +36,23 @@ await page.keyboard.press('b');
 await page.evaluate(() => {
   const { game, input } = window.__rogueShuttle;
   const RS = window.RogueShuttle;
-  // joueur scripté : injecte un stick + frappes via les touches virtuelles
+  let pressed = null;
   setInterval(() => {
     const p = game.player, s = game.shuttle;
-    if (game.state === 'serve' && game.server === p) { input.just.push('B'); return; }
     input.keys = {};
-    if (game.state !== 'rally' || game.lastHitter === p || !game.pred) return;
-    let t = null;
-    for (const q of game.pred.path) { if (q.t <= s.t || q.z > -0.35 || q.y > 2.3 || q.y < 0.15) continue; if (q.vy > 0 && q.y > 0.9) continue; t = q; break; }
-    if (!t) t = game.pred.landing;
+    for (const k in input.held) input.held[k] = false;
+    if (pressed) { pressed = null; return; }                 // image de relâchement : le coup part
+    if (game.state === 'serve' && game.server === p) { input.just.push('B'); pressed = 'B'; input.held.B = true; return; }
+    if (game.state !== 'rally' || p.dive || game.lastHitter === p || !game.pred) return;
+    const info = game.interceptInfo(p);
+    const t = info ? info.point : game.pred.landing;
     const dx = t.x - p.x, dz = t.z - RS.SWEET - p.z;
     input.keys = { arrowright: dx > 0.1, arrowleft: dx < -0.1, arrowup: dz > 0.1, arrowdown: dz < -0.1 };
-    const near = Math.hypot(s.x - p.x, s.z - (p.z + RS.SWEET)) < 1.6 && s.z < 0.3;
-    if (near && !p.armed) { const btn = s.y > 1.1 ? 'A' : 'B'; input.just.push(btn); input.held[btn] = true; }
-    if (!near) for (const k in input.held) input.held[k] = false;
-  }, 33);
+    const tContact = (t.t || 0) - s.t, mid = (RS.SWING_HIT0 + RS.SWING_HIT1) / 2;
+    if (!p.act && p.swing <= 0 && tContact <= mid + 0.03 && tContact > -0.05) {
+      const b = s.y > 1.1 ? 'A' : 'B'; input.just.push(b); pressed = b; input.held[b] = true;
+    }
+  }, 16);
 });
 const shots = [];
 for (let i = 0; i < 40; i++) {

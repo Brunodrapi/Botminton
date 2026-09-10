@@ -119,9 +119,10 @@
     $('scoreYou').textContent = game.score[0];
     $('scoreBot').textContent = game.score[1];
     const p = game.player, b = game.bot;
-    setHeat(heatBars.you, p.heat); setHeat(heatBars.bot, b.heat);
-    heatPct.textContent = p.heat.toFixed(0) + '%';
-    heatBars.you.classList.toggle('overheat', p.overheat > 0);
+    setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
+    heatPct.textContent = p.energy.toFixed(0) + '%';
+    heatBars.you.classList.toggle('full', p.energy >= RS.MAX_ENERGY);
+    heatBars.bot.classList.toggle('full', b.energy >= RS.MAX_ENERGY);
     $('serveYou').classList.toggle('on', game.server === p);
     $('serveBot').classList.toggle('on', game.server === b);
   }
@@ -138,8 +139,8 @@
       ['Frappes', p.stats.hits],
       ['Parfaites', p.stats.perfect],
       ['Smashs', p.stats.smashes],
-      ['Heat max', p.stats.maxHeat.toFixed(0)],
-      ['Overheats', p.overheats],
+      ['Super smashs', p.stats.supers],
+      ['Coups dans le vide', p.stats.whiffs],
       ['Plus long échange', game.longestRally],
     ];
     $('endStats').innerHTML = rows.map(([k, v]) => `<div>${k} <b>${v}</b></div>`).join('');
