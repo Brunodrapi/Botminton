@@ -14,10 +14,10 @@
   };
 
   const DIFFICULTY = {
-    rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#f2c230', sheet: 'bw-01', tint: false },
-    pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a', sheet: 'rg-b1', tint: true },
-    elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 7.6, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#4a9cf0', sheet: 'rg-03', tint: false, hover: true },
-    boss:   { key: 'boss',   name: 'BOSS',   tempo: 1.12, speed: 7.8, reaction: 0.11, aggression: 0.9,  errorRate: 0.05, aimNoise: 0.22, posNoise: 0.08, judge: 0.98, chassis: 'heavy', color: '#a052ff', sheet: 'zg-04', tint: false, hover: true, reach: 1.65 },
+    rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#f2c230', sheet: 'bw-01', tint: false, dive: 0.25 },
+    pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a', sheet: 'rg-b1', tint: true, dive: 0.5 },
+    elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 7.6, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#4a9cf0', sheet: 'rg-03', tint: false, hover: true, dive: 0.75 },
+    boss:   { key: 'boss',   name: 'BOSS',   tempo: 1.12, speed: 7.8, reaction: 0.11, aggression: 0.9,  errorRate: 0.05, aimNoise: 0.22, posNoise: 0.08, judge: 0.98, chassis: 'heavy', color: '#a052ff', sheet: 'zg-04', tint: false, hover: true, reach: 1.65, dive: 0.9 },
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite', 'boss'];
 
@@ -30,6 +30,16 @@
   const CHARGE_TIME = 0.36;    // maintenir A jusque-là (temps mort inclus) = smash préparé
   const JUMP_REACH = 3.3;      // hauteur max atteignable en sautant pour smasher
   const JUMP_TIME = 0.45;
+  // Plongeon (sauvetage) : détente rapide avec allonge, puis un temps au sol avant de se relever.
+  const DIVE_LUNGE = 0.30;     // détente : le robot glisse et peut frapper
+  const DIVE_GROUND = 0.45;    // au sol, immobile
+  const DIVE_RISE = 0.22;      // il se relève
+  const DIVE_TOTAL = DIVE_LUNGE + DIVE_GROUND + DIVE_RISE;
+  const DIVE_SPEED = 1.9;      // multiplicateur de vitesse pendant la détente
+  const DIVE_REACH = 0.85;     // allonge supplémentaire pendant la détente
+  const DIVE_MIN_SPEED = 1.5;  // il faut être lancé pour plonger
+  const DIVE_RANGE = 2.7;      // distance maximale rattrapable en plongeant
+
   const MAX_HEAT = 100;
   const OVERHEAT_TIME = 3.0;
 
@@ -41,7 +51,7 @@
       side, isAI, chassis: CHASSIS[chassisKey], color: CHASSIS[chassisKey].color, accent: CHASSIS[chassisKey].accent,
       x: 0, z: side * 3.5, vx: 0, vz: 0, moveX: 0, moveZ: 0, walk: 0,
       heat: 0, overheat: 0, overheats: 0,
-      armed: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0,
+      armed: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0, dive: null,
       stats: { hits: 0, perfect: 0, smashes: 0, maxHeat: 0 },
       ai: { reactAt: 0, shot: null, noiseX: 0, judgedOut: false, target: null },
     };
@@ -92,8 +102,8 @@
       const srv = this.server, rcv = this.other(srv);
       const even = this.score[srv === this.robots[0] ? 0 : 1] % 2 === 0;
       const serverX = -srv.side * (even ? 1 : -1) * 1.1;
-      srv.x = serverX; srv.z = srv.side * 3.2; srv.vx = srv.vz = 0; srv.armed = null;
-      rcv.x = -serverX; rcv.z = rcv.side * 3.6; rcv.vx = rcv.vz = 0; rcv.armed = null;
+      srv.x = serverX; srv.z = srv.side * 3.2; srv.vx = srv.vz = 0; srv.armed = null; srv.dive = null;
+      rcv.x = -serverX; rcv.z = rcv.side * 3.6; rcv.vx = rcv.vz = 0; rcv.armed = null; rcv.dive = null;
       this.serveBoxSign = Math.sign(rcv.x) || 1;
       const s = this.shuttle;
       s.x = srv.x + 0.15 * (-srv.side); s.y = 1.0; s.z = srv.z - srv.side * 0.45;
@@ -119,7 +129,16 @@
       const gdt = dt * (this.diff.tempo || 1);   // tempo du niveau : tout le jeu ralentit ou accélère
       this.updatePlayerInput(input);
       this.updateAI(dt);
-      for (const r of this.robots) { this.moveRobot(r, gdt); this.updateHeat(r, dt); if (r.swing > 0) r.swing -= dt; if (r.jumpT > 0) r.jumpT -= dt; }
+      for (const r of this.robots) {
+        if (r.dive) {
+          r.dive.t += dt;
+          if (r.dive.t >= DIVE_LUNGE && r.armed) r.armed = null;   // la détente passée, on ne frappe plus
+          if (r.dive.t >= DIVE_TOTAL) r.dive = null;
+        }
+        this.moveRobot(r, gdt); this.updateHeat(r, dt);
+        if (r.swing > 0) r.swing -= dt;
+        if (r.jumpT > 0) r.jumpT -= dt;
+      }
 
       const s = this.shuttle;
       if (this.state === 'serve') {
@@ -173,9 +192,15 @@
       }
       p.aimX = mx;
       p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
+      if (p.dive) { p.moveX = 0; p.moveZ = 0; return; }        // plongeon en cours : plus aucune commande
       if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
       // Une pression arme la raquette et mémorise la direction affichée (elle servira si c'est une frappe rapide).
-      for (const btn of input.just) if (btn === 'A' || btn === 'B') p.armed = { btn, t0: this.time, released: null, ax: mx, dz: mz, lastD: null };
+      for (const btn of input.just) {
+        if (btn !== 'A' && btn !== 'B') continue;
+        const t = this.diveTarget(p);
+        if (t) { this.startDive(p, t.x, t.z, { btn, t0: this.time, released: this.time, ax: mx, dz: mz, dive: true, lastD: null }); return; }
+        p.armed = { btn, t0: this.time, released: null, ax: mx, dz: mz, lastD: null };
+      }
       if (p.armed && p.armed.released === null && !input.held[p.armed.btn]) p.armed.released = this.time;
       // Maintenu : le robot se fige et la croix oriente la frappe. Relâché : la frappe reste en attente et on court.
       if (p.armed && p.armed.released === null) { p.moveX = 0; p.moveZ = 0; } else { p.moveX = mx; p.moveZ = mz; }
@@ -184,7 +209,7 @@
     /** Traduit bouton + croix + hauteur du volant en type de frappe (schéma Game Boy). */
     resolveShot(btn, charged, dirZ, y) {
       const up = dirZ > 0.5;
-      if (btn === 'B') return up ? 'attack' : 'clear';
+      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';   // bas = court, haut ou neutre = long
       if (charged && y >= 1.75) return 'smash';   // seule frappe qui demande une préparation
       return up ? 'drop' : 'drive';
     }
@@ -206,26 +231,73 @@
       return this.chargeOf(r) >= 1 && r.overheat <= 0;
     }
 
-    /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
-    interceptFor(r) {
+    speedOf(r) { return r.isAI ? this.diff.speed : r.chassis.speed; }
+    reachOf(r) { return r.isAI && this.diff.reach ? this.diff.reach : r.chassis.reach; }
+
+    /** Point d'interception sur la trajectoire prédite, et s'il est atteignable en courant. */
+    interceptInfo(r) {
       const s = this.shuttle, side = r.side;
-      const speed = r.isAI ? this.diff.speed : r.chassis.speed;
-      let best = null, fallback = null;
+      const speed = this.speedOf(r);
+      let fallback = null;
       for (const p of this.pred.path) {
         if (p.t <= s.t) continue;
         if (p.z * side < 0.35) continue;
         if (p.y > 2.3 || p.y < 0.15) continue;
         if (p.vy > 0 && p.y > 0.9) continue;
         const dist = Math.hypot(p.x - r.x, p.z + side * SWEET - r.z);
-        if (dist / speed <= (p.t - s.t) + 0.03) { best = p; break; }
+        if (dist / speed <= (p.t - s.t) + 0.03) return { point: p, reachable: true };
         fallback = p;
       }
-      return best || fallback;
+      return fallback ? { point: fallback, reachable: false } : null;
+    }
+
+    /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
+    interceptFor(r) {
+      const i = this.interceptInfo(r);
+      return i && i.point;
+    }
+
+    /** Point à rattraper en plongeant, ou null : il faut être lancé, hors de portée, mais pas trop loin. */
+    diveTarget(r) {
+      if (this.state !== 'rally' || this.lastHitter === r || !this.pred || r.dive) return null;
+      if (Math.hypot(r.vx, r.vz) < DIVE_MIN_SPEED) return null;
+      const info = this.interceptInfo(r);
+      if (!info || info.reachable) return null;              // à portée en courant : pas besoin de plonger
+      const p = info.point;
+      const tz = p.z + r.side * SWEET;
+      const gap = Math.hypot(p.x - r.x, tz - r.z);
+      const dt = p.t - this.shuttle.t;
+      if (dt < 0.05 || dt > 0.9) return null;                // ni trop tôt ni désespéré
+      if (gap <= this.reachOf(r) * 0.9 || gap > DIVE_RANGE) return null;
+      return { x: p.x, z: tz };
+    }
+
+    /** Détente vers (tx, tz) : le robot glisse, frappe s'il touche, puis reste au sol. */
+    startDive(r, tx, tz, arm) {
+      const dx = tx - r.x, dz = tz - r.z, d = Math.hypot(dx, dz) || 1;
+      // La détente est calibrée sur la distance à couvrir : un plongeon court ne projette pas le robot au bout du terrain.
+      const maxS = this.speedOf(r);
+      const sp = clamp(d / (0.7 * DIVE_LUNGE), maxS, maxS * DIVE_SPEED);
+      r.dive = { t: 0, dx: dx / d, dz: dz / d, sp };
+      r.armed = arm;
+      r.vx = dx / d * sp; r.vz = dz / d * sp;
+      this.events.push({ type: 'dive', robot: r });
     }
 
     moveRobot(r, dt) {
-      let maxS = r.isAI ? this.diff.speed : r.chassis.speed;
+      let maxS = this.speedOf(r);
       if (r.overheat > 0) maxS *= 0.7;
+      if (r.dive) {
+        const d = r.dive;
+        if (d.t < DIVE_LUNGE) {
+          const sp = d.sp * (0.4 + 0.6 * (1 - d.t / DIVE_LUNGE));                 // la détente s'essouffle
+          r.vx = d.dx * sp; r.vz = d.dz * sp;
+        } else { r.vx *= 0.8; r.vz *= 0.8; }                                      // au sol : on glisse et on s'arrête
+        r.x = clamp(r.x + r.vx * dt, -3.4, 3.4);
+        const zN = r.side * 0.45, zF = r.side * 7.6;
+        r.z = clamp(r.z + r.vz * dt, Math.min(zN, zF), Math.max(zN, zF));
+        return;
+      }
       const accel = r.isAI ? 60 : r.chassis.accel;
       let mx = r.moveX, mz = r.moveZ;
       const m = Math.hypot(mx, mz);
@@ -298,7 +370,8 @@
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
         const maxY = this.smashReady(r) ? JUMP_REACH : 2.6;
-        const reach = r.isAI && this.diff.reach ? this.diff.reach : r.chassis.reach;   // deux raquettes = plus d'allonge
+        let reach = this.reachOf(r);                                    // deux raquettes = plus d'allonge
+        if (r.dive) reach += DIVE_REACH;                                // en pleine détente, on va chercher loin
         const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
         if (!inReach) { r.armed.lastD = null; continue; }
         const a = r.armed;
@@ -324,9 +397,13 @@
 
       let shot = r.isAI ? a.shot : this.resolveShot(a.btn, charged, dirZ, s.y);
       let note = null;
-      if (shot === 'smash' && !charged) { shot = 'drive'; note = 'PRÉCIPITÉ'; }   // …sauf le smash, qui exige la préparation
-      else if (!r.isAI && a.btn === 'A' && held && s.y >= 1.75 && this.time - a.t0 >= TAP_TIME) note = 'PRÉCIPITÉ';
-      if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
+      if (a.dive) {
+        shot = 'clear'; level = Math.min(level, 1); note = 'SAUVETAGE!';           // plongeon : on remet haut, sans plus
+      } else {
+        if (shot === 'smash' && !charged) { shot = 'drive'; note = 'PRÉCIPITÉ'; }  // …sauf le smash, qui exige la préparation
+        else if (!r.isAI && a.btn === 'A' && held && s.y >= 1.75 && this.time - a.t0 >= TAP_TIME) note = 'PRÉCIPITÉ';
+        if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
+      }
       const jump = shot === 'smash' && s.y > 2.5;
       if (jump) { r.jumpT = JUMP_TIME; note = 'JUMP SMASH!'; }
 
@@ -427,6 +504,7 @@
       r.ai.noiseX = rnd(-1, 1) * d.posNoise;
       const out = this.pred && !this.pred.net && !P.inSingles(this.pred.landing.x, this.pred.landing.z, -0.1);
       r.ai.judgedOut = out && Math.random() < d.judge;
+      r.ai.willDive = Math.random() < (d.dive || 0);   // décidé une fois par échange, pas à chaque image
       r.ai.target = null;
     }
 
@@ -436,10 +514,20 @@
       const s = this.shuttle;
       const side = ai.side;
       let tx = 0, tz = side * 3.2;
+      if (ai.dive) { ai.moveX = 0; ai.moveZ = 0; return; }      // plongeon en cours
       const incoming = this.state === 'rally' && this.lastHitter !== ai && this.pred;
 
       if (incoming && this.time >= ai.ai.reactAt && !ai.ai.judgedOut) {
-        const target = this.interceptFor(ai);
+        const info = this.interceptInfo(ai);
+        const target = info && info.point;
+        if (target && info.reachable === false && ai.ai.willDive && Math.hypot(ai.vx, ai.vz) >= DIVE_MIN_SPEED) {
+          const gx = target.x, gz = target.z + side * SWEET;
+          const gap = Math.hypot(gx - ai.x, gz - ai.z), dtp = target.t - s.t;
+          if (gap > this.reachOf(ai) * 0.9 && gap <= DIVE_RANGE && dtp > 0.05 && dtp < 0.9) {
+            this.startDive(ai, gx, gz, { shot: 'clear', t0: this.time, released: this.time, dive: true, lastD: null });
+            return;
+          }
+        }
         if (target) {
           tx = target.x + ai.ai.noiseX;
           tz = target.z + side * SWEET;
@@ -550,5 +638,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, JUMP_TIME };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, JUMP_TIME, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

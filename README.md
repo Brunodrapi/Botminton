@@ -18,9 +18,10 @@ Cette version est le **prototype de concept** : un match, premier à 15, sans le
 | **A tapé + croix vers le haut** | Amorti (près du filet) |
 | **A maintenu** (préparation) | La charge démarre après un temps mort de 0,14 s. Pleine à 0,36 s : smash si le volant est haut, jump smash s'il est très haut |
 | **B** (tapé) | Dégagé long (haut, au fond) |
-| **B tapé + croix vers le haut** | Dégagé court (tendu, mi-court) |
+| **B tapé + croix vers le bas** | Dégagé court (tendu, mi-court) |
 | Maintenir un bouton | Immobilise le robot ; la croix sert alors à orienter le coup. Seul le smash demande une préparation |
 | Taper un bouton | Coup rapide : direction figée à la pression, robot libre de continuer à courir |
+| A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol avant de se relever |
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
@@ -31,6 +32,7 @@ Cette version est le **prototype de concept** : un match, premier à 15, sans le
 - **Hauteur du volant** : vraie trajectoire avec traînée aérodynamique ; dégagé, drive, amorti, smash ont des formes différentes.
 - **Heat** : smash +15, drive +5, amorti −6, dégagé −4, refroidissement passif. À 100 → Overheat (−30 % vitesse, 3 s).
 - **Châssis** : Light / Balanced / Heavy (vitesse, smash, chauffe, refroidissement, allonge).
+- **Plongeon** : déclenché à la pression quand le point d'interception est hors de portée en courant, à moins de 2,7 m et à moins de 0,9 s. Détente de 0,30 s avec 0,85 m d'allonge en plus, puis 0,67 s d'immobilisation. L'IA plonge aussi, d'autant plus souvent que son niveau est élevé.
 - **Match à 15**, deux points d'écart, plafond 20, service par le gagnant de l'échange.
 - **IA** : Rookie / Pro / Elite / Boss (vitesse, réaction, agressivité, taux d'erreur) et **tempo** du jeu : robots et volant plus lents en Rookie, plus rapides en Elite.
 

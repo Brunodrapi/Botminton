@@ -66,6 +66,11 @@
           else { this.tone(330, 0.2, 'square', 0.12, 0); this.tone(220, 0.3, 'square', 0.12, 0.15); }
           break;
         }
+        case 'dive': {
+          this.burst(2200, 0.22, 0.35, 0.7);            // souffle de la détente
+          this.tone(300, 0.16, 'triangle', 0.12, 0, 120);
+          break;
+        }
         case 'overheat': {
           for (let i = 0; i < 4; i++) this.tone(110, 0.1, 'square', 0.15, i * 0.13);
           break;

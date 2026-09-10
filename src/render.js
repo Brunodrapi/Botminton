@@ -157,6 +157,21 @@
       this.shuttleSize = size;
     }
 
+    /** Comme drawSprite, mais incliné : pivot à mi-hauteur du corps (plongeon). */
+    drawSpriteRot(sheet, name, x, y, flip, src, ang) {
+      const a = this.atlases[sheet];
+      const f = a && a.frames[name];
+      if (!f) return;
+      const b = this.bctx;
+      const ax = CENTER_ANCHOR[name] ? Math.round(f.w / 2) : f.ax;
+      b.save();
+      b.translate(Math.round(x), Math.round(y - f.h / 2));
+      b.rotate(ang);
+      if (flip) b.scale(-1, 1);
+      b.drawImage(src || a.img, f.x, f.y, f.w, f.h, flip ? -(f.w - ax) : -ax, -f.h / 2, f.w, f.h);
+      b.restore();
+    }
+
     /** Dessine un sprite de l'atlas, ancre (pieds) en (x, y). flip = miroir horizontal. */
     drawSprite(sheet, name, x, y, flip, src) {
       const a = this.atlases[sheet];
@@ -364,6 +379,21 @@
       b.fillRect(p.x - 6, p.y - 1, 13, 1); b.fillRect(p.x - 8, p.y, 17, 1); b.fillRect(p.x - 6, p.y + 1, 13, 1);
       const sheet = r.sheet || 'rg-b1';
       if (!this.atlases[sheet]) return;
+
+      // plongeon : détente inclinée, puis le robot reste au sol avant de se relever
+      if (r.dive) {
+        const d = r.dive, L = RS.DIVE_LUNGE, G = RS.DIVE_GROUND;
+        const flip = d.dx < 0;
+        const sign = flip ? -1 : 1;
+        let ang, air, name;
+        if (d.t < L) { const u = d.t / L; ang = Math.min(1, u * 1.7) * Math.PI / 2; air = Math.round(Math.sin(Math.PI * u) * 7); name = 'hit_low'; }
+        else if (d.t < L + G) { ang = Math.PI / 2; air = 0; name = 'lose'; }
+        else { ang = Math.PI / 2 * (1 - (d.t - L - G) / RS.DIVE_RISE); air = 0; name = 'lose'; }
+        const srcD = this.tinted(sheet, r.tint ? r.color : null);
+        this.drawSpriteRot(sheet, name, p.x, p.y - air, flip, srcD, ang * sign * (flip ? -1 : 1));
+        if (d.t >= L && Math.floor(this.time * 8) % 2) this.text('!', p.x, p.y - 26, PAL.white, 8, true);
+        return;
+      }
 
       const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 14) : 0;
       let bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
