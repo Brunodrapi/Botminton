@@ -226,8 +226,9 @@
 
     /** Traduit bouton + croix en type de frappe (le smash est traité à part, par la charge). */
     resolveShot(btn, dirZ) {
-      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';   // bas = dégagé court, sinon long
-      return dirZ > 0.5 ? 'drop' : 'drive';                       // haut = amorti, sinon drive
+      // Vers le bas = coup court, y compris en diagonale (la croix quantifiée donne −0,71 sur les obliques).
+      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';
+      return dirZ < -0.5 ? 'drop' : 'drive';
     }
 
     /** Progression de la charge du smash (0 à 1), ou −1 si le robot ne charge pas. */

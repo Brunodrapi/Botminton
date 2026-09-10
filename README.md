@@ -17,7 +17,7 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 | --- | --- |
 | Croix | Déplacement 8 directions. La direction au relâchement oriente le coup |
 | **A** | Drive (tendu, rapide) |
-| **A + croix vers le haut** | Amorti (près du filet) |
+| **A + croix vers le bas** | Amorti (près du filet) ; en diagonale bas-gauche ou bas-droit, l'amorti part de ce côté |
 | **A maintenu** | Charge le smash : barre sous le robot, puis lueur blanche quand il est prêt. Relâché au bon moment il smashe, sinon il rate le volant |
 | **B** | Dégagé long (haut, au fond) |
 | **B + croix vers le bas** | Dégagé court (tendu, mi-court) |
