@@ -14,9 +14,9 @@
   };
 
   const DIFFICULTY = {
-    rookie: { key: 'rookie', name: 'ROOKIE', speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#ff7a5e' },
-    pro:    { key: 'pro',    name: 'PRO',    speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a' },
-    elite:  { key: 'elite',  name: 'ELITE',  speed: 6.9, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#d05eff' },
+    rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#ff7a5e' },
+    pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a' },
+    elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 6.9, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#d05eff' },
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite'];
 
@@ -109,9 +109,10 @@
       this.matchTime += dt;
       if (this.message) this.message.t += dt;
 
+      const gdt = dt * (this.diff.tempo || 1);   // tempo du niveau : tout le jeu ralentit ou accélère
       this.updatePlayerInput(input);
       this.updateAI(dt);
-      for (const r of this.robots) { this.moveRobot(r, dt); this.updateHeat(r, dt); }
+      for (const r of this.robots) { this.moveRobot(r, gdt); this.updateHeat(r, dt); if (r.swing > 0) r.swing -= dt; }
 
       const s = this.shuttle;
       if (this.state === 'serve') {
@@ -126,8 +127,8 @@
           this.serve(srv, btn === 'A' ? 'drop' : 'clear');
         }
       } else if (this.state === 'rally') {
-        const n = Math.max(1, Math.ceil(dt / (1 / 120)));
-        const h = dt / n;
+        const n = Math.max(1, Math.ceil(gdt / (1 / 120)));
+        const h = gdt / n;
         for (let i = 0; i < n; i++) {
           s.px = s.x; s.py = s.y; s.pz = s.z;
           P.step(s, h);
@@ -141,7 +142,7 @@
         if (sp > 11) { s.trail.push({ x: s.x, y: s.y, z: s.z }); if (s.trail.length > 10) s.trail.shift(); }
         else if (s.trail.length) s.trail.shift();
       } else if (this.state === 'point') {
-        if (s.y > 0) { s.vy -= P.G * dt; s.y = Math.max(0, s.y + s.vy * dt); s.x += s.vx * dt; s.z += s.vz * dt; }
+        if (s.y > 0) { s.vy -= P.G * gdt; s.y = Math.max(0, s.y + s.vy * gdt); s.x += s.vx * gdt; s.z += s.vz * gdt; }
         if (s.trail.length) s.trail.shift();
         this.pointTimer -= dt;
         if (this.pointTimer <= 0) this.nextRally();
@@ -165,10 +166,11 @@
       }
       p.aimX = mx;
       p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
-      p.moveX = mx; p.moveZ = mz;
-      if (this.state !== 'rally') { p.armed = null; return; }
+      if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
       for (const btn of input.just) if (btn === 'A' || btn === 'B') p.armed = { btn, t0: this.time, lastD: null };
       if (p.armed && !input.held[p.armed.btn]) p.armed = null;
+      // Bouton maintenu : le robot se fige, la croix ne sert plus qu'à orienter la frappe.
+      if (p.armed) { p.moveX = 0; p.moveZ = 0; } else { p.moveX = mx; p.moveZ = mz; }
     }
 
     /** Traduit bouton + croix + hauteur du volant en type de frappe (schéma Game Boy). */
@@ -211,7 +213,6 @@
       const zNear = r.side * 0.45, zFar = r.side * 7.6;
       r.z = clamp(r.z + r.vz * dt, Math.min(zNear, zFar), Math.max(zNear, zFar));
       r.walk += Math.hypot(r.vx, r.vz) * dt * 2.2;
-      if (r.swing > 0) r.swing -= dt;
     }
 
     updateHeat(r, dt) {
