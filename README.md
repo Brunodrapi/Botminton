@@ -14,24 +14,25 @@ Cette version est le **prototype de concept** : un match, premier à 15, sans le
 | Entrée | Action |
 | --- | --- |
 | Croix | Déplacement 8 directions. Gauche/droite au moment de la frappe oriente le volant |
-| **A** | Drive (tendu, rapide) |
-| **A + croix vers le haut** | Amorti (près du filet) |
-| **A maintenu** (préparation) | Smash quand le volant arrive haut ; volant très haut = le robot saute et smashe. Pas préparé = drive précipité |
-| **B** | Dégagé long (haut, au fond) |
-| **B + croix vers le haut** | Dégagé court (tendu, mi-court) |
+| **A** (tapé) | Drive (tendu, rapide) ; la frappe reste en attente sans bloquer la course |
+| **A tapé + croix vers le haut** | Amorti (près du filet) |
+| **A maintenu** (préparation) | La charge démarre après un temps mort de 0,14 s. Pleine à 0,36 s : smash si le volant est haut, jump smash s'il est très haut |
+| **B** (tapé) | Dégagé long (haut, au fond) |
+| **B tapé + croix vers le haut** | Dégagé court (tendu, mi-court) |
 | Maintenir un bouton | Immobilise le robot ; la croix sert alors à orienter le coup. Seul le smash demande une préparation |
+| Taper un bouton | Coup rapide : direction figée à la pression, robot libre de continuer à courir |
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
 ## Systèmes du concept déjà présents
 
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et une fois sur trois c'est une faute.
-  Le **smash** est le seul coup à préparer : A maintenu au moins 0,3 s avant l'impact, sinon drive précipité. Volant au-dessus de 2,5 m = jump smash.
+  Le **smash** est le seul coup à préparer : A maintenu 0,36 s avant l'impact, sinon drive précipité. Volant au-dessus de 2,5 m = jump smash.
 - **Hauteur du volant** : vraie trajectoire avec traînée aérodynamique ; dégagé, drive, amorti, smash ont des formes différentes.
 - **Heat** : smash +15, drive +5, amorti −6, dégagé −4, refroidissement passif. À 100 → Overheat (−30 % vitesse, 3 s).
 - **Châssis** : Light / Balanced / Heavy (vitesse, smash, chauffe, refroidissement, allonge).
 - **Match à 15**, deux points d'écart, plafond 20, service par le gagnant de l'échange.
-- **IA** : Rookie / Pro / Elite (vitesse, réaction, agressivité, taux d'erreur) et **tempo** du jeu : robots et volant plus lents en Rookie, plus rapides en Elite.
+- **IA** : Rookie / Pro / Elite / Boss (vitesse, réaction, agressivité, taux d'erreur) et **tempo** du jeu : robots et volant plus lents en Rookie, plus rapides en Elite.
 
 ## Code
 

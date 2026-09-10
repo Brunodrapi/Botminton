@@ -15,6 +15,7 @@ SHEETS = {
     'rg-b1': dict(src='assets/rg-b1-sheet.png', rows=[(178, 392, 0, 1536), (478, 712, 0, 1536), (786, 965, 0, 870)], obj=(884, 770, 1150, 965)),
     'bw-01': dict(src='assets/bw-01-sheet.png', rows=[(172, 352, 0, 1536), (452, 662, 0, 1536), (742, 915, 0, 870)], obj=(884, 710, 1140, 918)),
     'rg-03': dict(src='assets/rg-03-sheet.png', rows=[(174, 372, 0, 1536), (470, 690, 0, 1536), (762, 935, 0, 870)], obj=(884, 735, 1140, 935)),
+    'zg-04': dict(src='assets/zg-04-sheet.png', rows=[(174, 376, 0, 1536), (468, 685, 0, 1536), (758, 935, 0, 870)], obj=(884, 730, 1140, 935)),
 }
 ROW_NAMES = [
     ['face', 'back', 'side_l', 'side_r', 'idle', 'walk1', 'walk2', 'run1', 'run2'],

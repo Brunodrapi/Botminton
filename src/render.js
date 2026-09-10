@@ -288,7 +288,7 @@
       if (!r.armed) return;
       const b = this.bctx;
       const p = this.px(r.x, 0, r.z - r.side * RS.SWEET);
-      b.fillStyle = SHOT_COLORS[r.armed.shot] || PAL.white;
+      b.fillStyle = SHOT_COLORS[r.armed.shot] || (r.armed.btn === 'B' ? SHOT_COLORS.clear : SHOT_COLORS.drive);
       b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 2, 1, 5);
     }
 
@@ -339,8 +339,7 @@
         else name = swingU < 0.55 ? 'hit_high' : 'follow';
         flip = !front;                              // joueur : raquette côté droit
       } else if (r.armed) {
-        const smash = r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A';
-        name = smash ? 'smash_prep' : 'prep';
+        name = game.chargeOf(r) >= 0 ? 'smash_prep' : 'prep';
         flip = !front;
       } else if (game.state === 'serve' && game.server === r) {
         name = front ? 'idle' : 'back';
@@ -375,10 +374,9 @@
       this.drawSprite(sheet, name, p.x, p.y - jump - bob, flip, src);
       b.globalAlpha = 1;
 
-      // barre de préparation du smash (joueur)
-      const armedSmash = r.armed && !r.isAI && r.armed.btn === 'A';
-      if (armedSmash) {
-        const k = clamp((this.gameTime - r.armed.t0) / RS.CHARGE_TIME, 0, 1);
+      // barre de préparation du smash (joueur) : n'apparaît qu'une fois le temps mort passé
+      const k = r.isAI ? -1 : game.chargeOf(r);
+      if (k >= 0) {
         b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
         b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * k), 2);
       }

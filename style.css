@@ -120,7 +120,9 @@ button { font-family: inherit; }
 .card .title { font-size: 8px; color: var(--card-color, var(--ink)); }
 .card.selected .title { color: var(--card-color, var(--paper)); filter: saturate(1.2) brightness(1.2); }
 .card .desc { font-size: 6px; line-height: 1.7; margin-top: 6px; opacity: 0.85; }
-.cards.small .card { text-align: center; padding: 8px 3px; }
+.cards.small { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.cards.small .card { text-align: center; padding: 8px 2px; }
+.cards.small .card .title { font-size: 7px; }
 .toggle { display: flex; align-items: center; gap: 8px; font-size: 7px; margin: 14px 0 2px; color: var(--ink-soft); }
 .toggle input { width: 18px; height: 18px; accent-color: var(--ink); }
 button.primary {

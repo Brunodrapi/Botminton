@@ -17,15 +17,17 @@
     rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#f2c230', sheet: 'bw-01', tint: false },
     pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a', sheet: 'rg-b1', tint: true },
     elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 7.6, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#4a9cf0', sheet: 'rg-03', tint: false, hover: true },
+    boss:   { key: 'boss',   name: 'BOSS',   tempo: 1.12, speed: 7.8, reaction: 0.11, aggression: 0.9,  errorRate: 0.05, aimNoise: 0.22, posNoise: 0.08, judge: 0.98, chassis: 'heavy', color: '#a052ff', sheet: 'zg-04', tint: false, hover: true, reach: 1.65 },
   };
-  const DIFF_ORDER = ['rookie', 'pro', 'elite'];
+  const DIFF_ORDER = ['rookie', 'pro', 'elite', 'boss'];
 
   const SHOT_NAMES = { clear: 'DÉGAGÉ', attack: 'DÉGAGÉ COURT', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
   const LEVEL_NAMES = ['FAIBLE', 'OK', 'PARFAIT'];
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
-  const CHARGE_TIME = 0.3;     // maintenir A au moins 0,3 s avant l'impact = smash préparé
+  const TAP_TIME = 0.14;       // temps mort : relâcher avant = frappe rapide, la charge n'a pas commencé
+  const CHARGE_TIME = 0.36;    // maintenir A jusque-là (temps mort inclus) = smash préparé
   const JUMP_REACH = 3.3;      // hauteur max atteignable en sautant pour smasher
   const JUMP_TIME = 0.45;
   const MAX_HEAT = 100;
@@ -172,26 +174,36 @@
       p.aimX = mx;
       p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
       if (this.state !== 'rally') { p.armed = null; p.moveX = mx; p.moveZ = mz; return; }
-      for (const btn of input.just) if (btn === 'A' || btn === 'B') p.armed = { btn, t0: this.time, lastD: null };
-      if (p.armed && !input.held[p.armed.btn]) p.armed = null;
-      // Bouton maintenu : le robot se fige, la croix ne sert plus qu'à orienter la frappe.
-      if (p.armed) { p.moveX = 0; p.moveZ = 0; } else { p.moveX = mx; p.moveZ = mz; }
+      // Une pression arme la raquette et mémorise la direction affichée (elle servira si c'est une frappe rapide).
+      for (const btn of input.just) if (btn === 'A' || btn === 'B') p.armed = { btn, t0: this.time, released: null, ax: mx, dz: mz, lastD: null };
+      if (p.armed && p.armed.released === null && !input.held[p.armed.btn]) p.armed.released = this.time;
+      // Maintenu : le robot se fige et la croix oriente la frappe. Relâché : la frappe reste en attente et on court.
+      if (p.armed && p.armed.released === null) { p.moveX = 0; p.moveZ = 0; } else { p.moveX = mx; p.moveZ = mz; }
     }
 
     /** Traduit bouton + croix + hauteur du volant en type de frappe (schéma Game Boy). */
-    resolveShot(r, btn, charged) {
-      const y = this.shuttle.y;
-      const up = (r.dirZ || 0) > 0.5;
+    resolveShot(btn, charged, dirZ, y) {
+      const up = dirZ > 0.5;
       if (btn === 'B') return up ? 'attack' : 'clear';
       if (charged && y >= 1.75) return 'smash';   // seule frappe qui demande une préparation
       return up ? 'drop' : 'drive';
     }
 
-    /** Un robot prêt à smasher (A maintenu assez longtemps) peut sauter pour aller chercher un volant plus haut. */
+    /** Progression de la préparation du smash (0 à 1), ou −1 si le robot ne prépare rien.
+     *  Rien ne se charge pendant le temps mort : un bouton tapé part en frappe rapide. */
+    chargeOf(r) {
+      const a = r.armed;
+      if (!a) return -1;
+      const wantsSmash = r.isAI ? a.shot === 'smash' : (a.btn === 'A' && a.released === null);
+      if (!wantsSmash) return -1;
+      const held = this.time - a.t0;
+      if (held < TAP_TIME) return -1;
+      return clamp((held - TAP_TIME) / (CHARGE_TIME - TAP_TIME), 0, 1);
+    }
+
+    /** Un robot dont le smash est prêt peut sauter pour aller chercher un volant plus haut. */
     smashReady(r) {
-      if (!r.armed) return false;
-      const wantsSmash = r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A';
-      return wantsSmash && (this.time - r.armed.t0) >= CHARGE_TIME && r.overheat <= 0;
+      return this.chargeOf(r) >= 1 && r.overheat <= 0;
     }
 
     /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
@@ -286,7 +298,8 @@
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
         const maxY = this.smashReady(r) ? JUMP_REACH : 2.6;
-        const inReach = dr <= r.chassis.reach && s.y <= maxY && s.y > 0.12;
+        const reach = r.isAI && this.diff.reach ? this.diff.reach : r.chassis.reach;   // deux raquettes = plus d'allonge
+        const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
         if (!inReach) { r.armed.lastD = null; continue; }
         const a = r.armed;
         const closest = a.lastD !== null && d >= a.lastD;
@@ -300,20 +313,24 @@
     hit(r, d) {
       const s = this.shuttle;
       const a = r.armed; r.armed = null;
-      const hold = this.time - a.t0;
       const place = d <= 0.6 ? 2 : d <= 1.05 ? 1 : 0;
-      const charged = hold >= CHARGE_TIME;
+      const held = a.released === null;
+      const charged = held && (this.time - a.t0) >= CHARGE_TIME;
+      // Frappe rapide : on rejoue la direction qu'affichait la croix au moment de la pression.
+      const aim = held ? (r.aimX || 0) : a.ax;
+      const dirZ = held ? (r.dirZ || 0) : a.dz;
       let level = place;                       // la qualité ne dépend que du placement…
       if (r.isAI) level = this.aiLevel(level);
 
-      let shot = r.isAI ? a.shot : this.resolveShot(r, a.btn, charged);
+      let shot = r.isAI ? a.shot : this.resolveShot(a.btn, charged, dirZ, s.y);
       let note = null;
       if (shot === 'smash' && !charged) { shot = 'drive'; note = 'PRÉCIPITÉ'; }   // …sauf le smash, qui exige la préparation
+      else if (!r.isAI && a.btn === 'A' && held && s.y >= 1.75 && this.time - a.t0 >= TAP_TIME) note = 'PRÉCIPITÉ';
       if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
       const jump = shot === 'smash' && s.y > 2.5;
       if (jump) { r.jumpT = JUMP_TIME; note = 'JUMP SMASH!'; }
 
-      const spec = this.shotSpec(r, shot, level);
+      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : aim);
       if (jump && spec.mode === 'speed') spec.speed *= 1.1;
       spec.from = { x: s.x, y: s.y, z: s.z };
       const plan = P.planShot(spec);
@@ -340,7 +357,7 @@
       this.onHitFor(this.other(r));
     }
 
-    shotSpec(r, shot, level) {
+    shotSpec(r, shot, level, aim) {
       const s = this.shuttle;
       const far = -r.side;
       const opp = this.other(r);
@@ -350,7 +367,7 @@
         aimX = away * rnd(1.0, 2.0);
         if (shot === 'drop' && Math.random() < 0.5) aimX = -Math.sign(s.x || 1) * rnd(0.6, 1.8);
       } else {
-        aimX = (r.aimX || 0) * 2.1;
+        aimX = (aim || 0) * 2.1;
       }
       const noise = [1.3, 0.5, 0.15][level] * (r.isAI ? this.diff.aimNoise : 1);
       const tx = clamp(aimX, -2.2, 2.2) + rnd(-noise, noise);
@@ -533,5 +550,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, CHARGE_TIME, JUMP_TIME };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, JUMP_TIME };
 })(typeof window !== 'undefined' ? window : globalThis);

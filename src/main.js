@@ -42,7 +42,7 @@
   const diffDefs = {};
   for (const k of RS.DIFF_ORDER) {
     const d = RS.DIFFICULTY[k];
-    diffDefs[k] = { name: d.name, color: d.color, desc: [k === 'rookie' ? 'lent, hésitant' : k === 'pro' ? 'solide, smashe' : 'rapide, châssis lourd'] };
+    diffDefs[k] = { name: d.name, color: d.color, desc: [{ rookie: 'lent, hésitant', pro: 'solide, smashe', elite: 'volant, rapide', boss: '2 raquettes, sans pitié' }[k]] };
   }
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
   buildCards($('diffCards'), diffDefs, 'difficulty');
