@@ -14,6 +14,7 @@ FACTOR = 5.75        # réduction commune à toutes les planches (RG-B1 de face 
 SHEETS = {
     'rg-b1': dict(src='assets/rg-b1-sheet.png', rows=[(178, 392, 0, 1536), (478, 712, 0, 1536), (786, 965, 0, 870)], obj=(884, 770, 1150, 965)),
     'bw-01': dict(src='assets/bw-01-sheet.png', rows=[(172, 352, 0, 1536), (452, 662, 0, 1536), (742, 915, 0, 870)], obj=(884, 710, 1140, 918)),
+    'rg-03': dict(src='assets/rg-03-sheet.png', rows=[(174, 372, 0, 1536), (470, 690, 0, 1536), (762, 935, 0, 870)], obj=(884, 735, 1140, 935)),
 }
 ROW_NAMES = [
     ['face', 'back', 'side_l', 'side_r', 'idle', 'walk1', 'walk2', 'run1', 'run2'],
@@ -83,7 +84,7 @@ def largest_component(fg):
                 if n > best_n: best, best_n = cur, n
     return label == best
 
-def split_cells(band):
+def split_cells(band, expected=None):
     """Découpe une bande en cellules selon les colonnes occupées (lignes fines ignorées)."""
     y0, y1, bx0, bx1 = band
     strip = im[y0:y1].copy()
@@ -107,6 +108,11 @@ def split_cells(band):
     for c in cells:
         if merged and c[0] - merged[-1][1] < 12: merged[-1] = (merged[-1][0], c[1])
         else: merged.append(c)
+    # trop de runs (bulle, volant décoratif séparé du robot) : on fusionne les plus proches
+    while expected and len(merged) > expected:
+        gaps = [merged[i + 1][0] - merged[i][1] for i in range(len(merged) - 1)]
+        i = gaps.index(min(gaps))
+        merged[i:i + 2] = [(merged[i][0], merged[i + 1][1])]
     # chaque colonne appartient à la cellule la plus proche : les structures fines (raquettes) restent dans leur cellule
     bounds = [bx0] + [(merged[i - 1][1] + merged[i][0]) // 2 for i in range(1, len(merged))] + [bx1]
     return [(bounds[i], bounds[i + 1]) for i in range(len(merged))]
@@ -158,7 +164,7 @@ def extract_sheet(key, cfg):
   H, W, _ = im.shape
   sprites = {}
   for band, names in zip(cfg['rows'], ROW_NAMES):
-    cells = split_cells(band)
+    cells = split_cells(band, len(names))
     if len(cells) != len(names):
         print(key, 'bande', band, ':', len(cells), 'cellules trouvées pour', len(names), 'noms', cells)
     for name, (cx0, cx1) in zip(names, cells):

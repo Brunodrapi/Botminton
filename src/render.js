@@ -367,7 +367,8 @@
       if (!this.atlases[sheet]) return;
 
       const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 14) : 0;
-      const bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
+      let bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
+      if (r.hover) bob += Math.round(Math.sin(this.time * 6) * 1.5) + 2;   // vol stationnaire
       const { name, flip } = this.robotPose(r, game);
       const src = this.tinted(sheet, r.tint ? r.color : null);
       if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;

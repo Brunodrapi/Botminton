@@ -16,7 +16,7 @@
   const DIFFICULTY = {
     rookie: { key: 'rookie', name: 'ROOKIE', tempo: 0.78, speed: 4.8, reaction: 0.40, aggression: 0.35, errorRate: 0.38, aimNoise: 1.0, posNoise: 0.45, judge: 0.5, chassis: 'balanced', color: '#f2c230', sheet: 'bw-01', tint: false },
     pro:    { key: 'pro',    name: 'PRO',    tempo: 0.92, speed: 6.0, reaction: 0.24, aggression: 0.6,  errorRate: 0.2,  aimNoise: 0.55, posNoise: 0.25, judge: 0.8, chassis: 'balanced', color: '#ff5e8a', sheet: 'rg-b1', tint: true },
-    elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 6.9, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#d05eff', sheet: 'rg-b1', tint: true },
+    elite:  { key: 'elite',  name: 'ELITE',  tempo: 1.06, speed: 7.6, reaction: 0.14, aggression: 0.8,  errorRate: 0.09, aimNoise: 0.3,  posNoise: 0.12, judge: 0.95, chassis: 'heavy', color: '#4a9cf0', sheet: 'rg-03', tint: false, hover: true },
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite'];
 
@@ -68,7 +68,7 @@
       this.robots = [makeRobot(-1, this.chassisKey, false), makeRobot(1, this.diff.chassis, true)];
       this.robots[1].color = this.diff.color; this.robots[1].accent = '#ffd6e6';
       this.robots[0].sheet = 'rg-b1'; this.robots[0].tint = this.chassisKey !== 'balanced';
-      this.robots[1].sheet = this.diff.sheet || 'rg-b1'; this.robots[1].tint = this.diff.tint !== false;
+      this.robots[1].sheet = this.diff.sheet || 'rg-b1'; this.robots[1].tint = this.diff.tint !== false; this.robots[1].hover = !!this.diff.hover;
       this.score = [0, 0];
       this.server = this.robots[0];
       this.lastHitter = null;
