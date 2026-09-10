@@ -27,15 +27,17 @@ ROW_NAMES = [
 im = None
 H = W = 0
 
-def bg_mask(cell):
+def bg_mask(cell, ground_only=True):
     """Pixels de fond : proches du crème local, ou gris clair (ombre au sol)."""
     sat = cell.max(axis=2) - cell.min(axis=2)
     lum = cell.mean(axis=2)
     # L'ombre portée est un gris neutre, mais la carrosserie d'un robot clair aussi :
     # on ne retire ce gris que dans la bande basse de la cellule, où se trouve le sol.
-    ground = np.zeros(cell.shape[:2], dtype=bool)
-    ground[int(cell.shape[0] * 0.85):] = True
-    greyish = ground & (sat < 22) & (lum > 125) & (lum < 205)
+    greyish = (sat < 22) & (lum > 125) & (lum < 205)
+    if ground_only:
+        ground = np.zeros(cell.shape[:2], dtype=bool)
+        ground[int(cell.shape[0] * 0.85):] = True
+        greyish = greyish & ground
     return cream_mask(cell) | greyish
 
 def cream_mask(cell):
@@ -70,14 +72,15 @@ def dilate(m, n):
 
 MAX_HOLE = 250   # au-dela de cette taille, un trou est examine de plus pres
 
-def sprite_mask(cell):
+def sprite_mask(cell, ground_only=True, drop_big_holes=True):
     """Contours fermés par dilatation avant le remplissage : l'intérieur des raquettes (couleur du fond) reste.
     Les trous trop grands (vide entre les jambes, ombre au sol enfermée) sont rendus au fond."""
-    fg0 = ~bg_mask(cell)
+    fg0 = ~bg_mask(cell, ground_only)
     fgd = dilate(fg0, 2)
     fgd[0, :] = fgd[-1, :] = False; fgd[:, 0] = fgd[:, -1] = False
     outside = flood_outside(~fgd)
     outside = dilate(outside, 2) & ~fg0
+    if not drop_big_holes: return ~outside      # panneau des objets : le volant est un aplat clair, on le garde entier
     holes = ~outside & ~fg0
     cream = cream_mask(cell)
     lum = cell.mean(axis=2)
@@ -209,7 +212,7 @@ def extract_sheet(key, cfg):
   # volants : composantes du panneau objets, on garde celle du haut à gauche
   ox0, oy0, ox1, oy1 = cfg['obj']
   cell = im[oy0:oy1, ox0:ox1]
-  fg = sprite_mask(cell)
+  fg = sprite_mask(cell, ground_only=False, drop_big_holes=False)
   # composante dont le centre est le plus en haut à gauche
   h, w = fg.shape
   label = np.zeros((h, w), dtype=np.int32); comps = []; cur = 0
