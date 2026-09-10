@@ -151,8 +151,8 @@
         : { pos: { x: 0, y: 26, z: -36 }, look: { x: 0, y: 0.4, z: 0.4 } };
       const c = this.cam.pos, l = this.cam.look;
       const f = norm({ x: l.x - c.x, y: l.y - c.y, z: l.z - c.z });
-      const r = norm(cross(f, { x: 0, y: 1, z: 0 }));
-      const u = cross(r, f);
+      const r = norm(cross({ x: 0, y: 1, z: 0 }, f)); // droite = +x monde à droite de l'écran
+      const u = cross(f, r);
       this.basis = { f, r, u };
       const pts = [];
       for (const x of [-3.5, 3.5]) for (const z of [-7.4, 7.2]) pts.push({ x, y: 0, z });
