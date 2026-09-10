@@ -71,12 +71,20 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   }
 }
 
-// Manche courte : premier à 5 points
+// Exhibition : un seul palier, à 15 points
 {
   const g = new RS.Game(); g.startMatch({});
-  g.score = [4, 3]; check('4-3 not finished', g.matchWinner() === -1);
+  check('exhibition target is 15', g.nextStep() === RS.LEVEL_TARGET);
+  g.score = [14, 3]; check('14-3 not finished', g.matchWinner() === -1);
+  g.score = [15, 3]; check('15 points wins the exhibition', g.matchWinner() === 0);
+}
+
+// Rogue lite : paliers de cartes tous les 5 points, run perdue si le bot atteint 15
+{
+  const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
+  g.score = [4, 3]; check('4-3 not a card step', g.matchWinner() === -1);
   g.score = [5, 3]; check('5 points reaches a card step', g.matchWinner() === 0);
-  g.score = [2, 15]; check('bot at 15 wins the run', g.matchWinner() === 1);
+  g.score = [2, 15]; check('bot at 15 ends the run', g.matchWinner() === 1);
 }
 
 // Progression de la run : 3 manches par niveau, cartes après chacune, raquette à la troisième
