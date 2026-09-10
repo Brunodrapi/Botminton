@@ -15,12 +15,14 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 
 | Entrée | Action |
 | --- | --- |
-| Croix | Déplacement 8 directions. La direction au relâchement oriente le coup |
-| **A** | Drive (tendu, rapide) |
+| Croix | Déplacement 8 directions. Au relâchement elle règle la profondeur (bas = court, neutre = mi-court, haut = fond) et, en diagonale, le côté |
+| **A** (neutre) | Drive mi-court (tendu, rapide) |
 | **A + croix vers le bas** | Amorti (près du filet) ; en diagonale bas-gauche ou bas-droit, l'amorti part de ce côté |
+| **A + croix vers le haut** | Drive profond, jusqu'au fond de court |
 | **A maintenu** | Charge le smash : barre sous le robot, puis lueur blanche quand il est prêt. Relâché au bon moment il smashe, sinon il rate le volant |
-| **B** | Dégagé long (haut, au fond) |
-| **B + croix vers le bas** | Dégagé court (tendu, mi-court) |
+| **B** (neutre) | Dégagé mi-court |
+| **B + croix vers le bas** | Dégagé court et tendu, il tombe devant |
+| **B + croix vers le haut** | Dégagé long, au fond de court |
 | Charger | Ralentit le robot à 45 % de sa vitesse |
 | A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
 | Service | A court, B long |
@@ -28,6 +30,7 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 
 ## Systèmes du concept déjà présents
 
+- **Trois profondeurs par bouton** : la croix vers le bas joue court, au neutre mi-court, vers le haut au fond. Les diagonales gardent la profondeur et ajoutent la visée latérale.
 - **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et une fois sur trois c'est une faute.
   Le **smash** demande une charge de 0,42 s et un volant à plus de 1,75 m ; au-dessus de 2,5 m le robot saute.

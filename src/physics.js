@@ -132,12 +132,13 @@
         res = sim(angle, speed);
       }
     } else {
-      angle = spec.angle;
+      // On relève l'angle par paliers jusqu'à passer le filet. L'angle retenu est toujours
+      // celui qui vient d'être simulé, sinon on renverrait une trajectoire jamais vérifiée.
       for (let i = 0; i < 14; i++) {
+        angle = spec.angle + i * 4;
         speed = solveSpeed(from, dir, angle, dist);
         res = sim(angle, speed);
         if (!crossesNet || clearance < 0 || res.netY === null || res.netY >= need) break;
-        angle += 4;
       }
     }
     const v = velocityFor(dir, angle, speed);

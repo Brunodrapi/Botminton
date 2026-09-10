@@ -225,10 +225,14 @@
     }
 
     /** Traduit bouton + croix en type de frappe (le smash est traité à part, par la charge). */
+    /** Profondeur visée : 0 court, 1 mi-court, 2 fond. Les diagonales comptent (croix quantifiée : ±0,71). */
+    depthOf(dirZ) { return dirZ < -0.5 ? 0 : dirZ > 0.5 ? 2 : 1; }
+
+    /** Le bouton donne la famille de trajectoire, la croix la profondeur. */
     resolveShot(btn, dirZ) {
-      // Vers le bas = coup court, y compris en diagonale (la croix quantifiée donne −0,71 sur les obliques).
-      if (btn === 'B') return dirZ < -0.5 ? 'attack' : 'clear';
-      return dirZ < -0.5 ? 'drop' : 'drive';
+      const d = this.depthOf(dirZ);
+      if (btn === 'B') return d === 0 ? 'attack' : 'clear';
+      return d === 0 ? 'drop' : 'drive';
     }
 
     /** Progression de la charge du smash (0 à 1), ou −1 si le robot ne charge pas. */
@@ -243,7 +247,7 @@
     /** Lance un coup de raquette. Il ne touchera que si le volant passe dans sa fenêtre de contact. */
     startSwing(r, shot, opt) {
       opt = opt || {};
-      r.act = { shot, t0: this.time, aim: opt.aim || 0, dirZ: opt.dirZ || 0, dive: !!opt.dive, lastD: null };
+      r.act = { shot, t0: this.time, aim: opt.aim || 0, depth: opt.depth == null ? 1 : opt.depth, dive: !!opt.dive, lastD: null };
       r.swing = SWING_TIME; r.swingShot = shot; r.swingLevel = 1;
       this.events.push({ type: 'swing', robot: r, shot });
     }
@@ -360,7 +364,13 @@
         spec = { mode: 'angle', angle: 58, target: { x: boxSign * rnd(0.4, 2.1) + rnd(-noise, noise), z: far * rnd(5.7, 6.3) }, clearance: 1.0 };
       }
       spec.from = { x: s.x, y: s.y, z: s.z };
-      const plan = P.planShot(spec);
+      let plan = P.planShot(spec);
+      // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
+      // on recule la cible jusqu'à ce qu'il passe. Les frappes faibles gardent le droit de faire faute.
+      for (let i = 0; i < 8 && plan.net && level > 0; i++) {
+        spec.target.z += Math.sign(spec.target.z || 1) * 0.45;
+        plan = P.planShot(spec);
+      }
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
       s.px = s.x; s.py = s.y; s.pz = s.z;
       this.lastHitter = srv;
@@ -417,10 +427,16 @@
       else if (jump) note = 'JUMP SMASH!';
       if (jump) r.jumpT = JUMP_TIME;
 
-      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : a.aim, sup);
+      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : a.aim, sup, a.depth);
       if (jump && spec.mode === 'speed') spec.speed *= 1.1;
       spec.from = { x: s.x, y: s.y, z: s.z };
-      const plan = P.planShot(spec);
+      let plan = P.planShot(spec);
+      // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
+      // on recule la cible jusqu'à ce qu'il passe. Les frappes faibles gardent le droit de faire faute.
+      for (let i = 0; i < 8 && plan.net && level > 0; i++) {
+        spec.target.z += Math.sign(spec.target.z || 1) * 0.45;
+        plan = P.planShot(spec);
+      }
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
       s.px = s.x; s.py = s.y; s.pz = s.z;
       this.lastHitter = r;
@@ -452,7 +468,7 @@
       this.onHitFor(this.other(r));
     }
 
-    shotSpec(r, shot, level, aim, sup) {
+    shotSpec(r, shot, level, aim, sup, depth) {
       const s = this.shuttle;
       const far = -r.side;
       const opp = this.other(r);
@@ -469,14 +485,15 @@
       const y = s.y;
       let spec;
       switch (shot) {
-        case 'clear': {
-          const tz = [4.3, 5.6, 6.35][level];
-          const angle = level === 0 ? 60 : (y > 1.6 ? 42 : 50);
+        case 'clear': {   // croix neutre : dégagé mi-court ; croix haut : dégagé au fond
+          const deep = depth >= 2;
+          const tz = (deep ? [4.8, 5.8, 6.35] : [4.0, 4.7, 5.2])[level];
+          const angle = level === 0 ? 60 : (deep ? (y > 1.6 ? 42 : 50) : (y > 1.6 ? 38 : 46));
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 1.2 : 0.7 };
           break;
         }
-        case 'attack': { // dégagé court : plus tendu, plus rapide, tombe mi-court
-          const tz = [3.6, 4.4, 5.0][level];
+        case 'attack': { // croix bas : dégagé court, tendu, il tombe devant
+          const tz = [3.0, 3.6, 4.1][level];
           const angle = level === 0 ? 50 : (y > 1.6 ? 24 : 34);
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 0.9 : 0.5 };
           break;
@@ -498,9 +515,10 @@
           }
           break;
         }
-        default: { // drive
-          const tz = [4.0, 5.2, 5.9][level];
-          const angle = level === 0 ? 32 : (y > 1.4 ? 2 : 14);
+        default: {        // drive — croix neutre : mi-court ; croix haut : jusqu'au fond
+          const deep = depth >= 2;
+          const tz = (deep ? [4.5, 5.4, 6.0] : [3.4, 4.2, 4.8])[level];
+          const angle = level === 0 ? 32 : (y > 1.4 ? (deep ? 6 : 2) : (deep ? 18 : 12));
           spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: [0.6, 0.3, 0.15][level] };
         }
       }
@@ -551,12 +569,15 @@
         if (target) {
           tx = target.x + ai.ai.noiseX;
           tz = target.z + side * SWEET;
-          if (!ai.ai.shot) ai.ai.shot = this.aiChooseShot(ai, target);
+          if (!ai.ai.shot) {
+            ai.ai.shot = this.aiChooseShot(ai, target);
+            ai.ai.depth = ai.ai.shot === 'clear' ? (Math.random() < 0.65 ? 2 : 1) : (Math.random() < 0.45 ? 2 : 1);
+          }
           // Le geste est déclenché pour que sa fenêtre de contact tombe sur l'arrivée du volant.
           if (!ai.act && ai.swing <= 0 && s.z * side > -0.3) {
             const near = Math.hypot(target.x - ai.x, tz - ai.z) < this.reachOf(ai) * 2;
             const start = (target.t - s.t) - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
-            if (near && start <= 0) this.startSwing(ai, ai.ai.shot);
+            if (near && start <= 0) this.startSwing(ai, ai.ai.shot, { depth: ai.ai.depth });
           }
         }
       } else {
