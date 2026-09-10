@@ -61,11 +61,13 @@
       <h2>Châssis</h2>
       <div class="cards" id="chassisCards"></div>
 
-      <p class="tag run-note">4 niveaux de 15 points · une carte tous les 5 points · protocole imposé chez le boss</p>
-
       <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
 
-      <button id="playBtn" class="primary">COMMENCER LA RUN</button>
+      <h2>Mode</h2>
+      <button id="playBtn" class="primary">ROGUE LITE</button>
+      <p class="tag run-note">4 niveaux de 15 points · une carte tous les 5 points · protocole imposé chez le boss</p>
+      <button id="exhibBtn" class="ghost">EXHIBITION</button>
+      <p class="tag run-note">Un match libre en 15 points contre l'adversaire de ton choix</p>
       <button id="helpBtn" class="ghost">Comment jouer ?</button>
     </div>
   </div>
@@ -99,6 +101,15 @@
       <h1 id="choiceTitle">MANCHE GAGNÉE</h1>
       <p class="tag" id="choiceSub">Choisis une pièce</p>
       <div class="choices" id="choiceList"></div>
+    </div>
+  </div>
+
+  <div id="opponents" class="panel hidden">
+    <div class="panel-inner">
+      <h1>EXHIBITION</h1>
+      <p class="tag">Choisis ton adversaire</p>
+      <div class="choices" id="oppList"></div>
+      <button id="oppBack" class="ghost">Retour</button>
     </div>
   </div>
 

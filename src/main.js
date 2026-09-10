@@ -40,7 +40,9 @@
     }
   }
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
-  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus'];
+  $('assistToggle').checked = !!settings.assist;
+  $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
+  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -54,6 +56,28 @@
     handicapShown = null;
     game.startRun(settings);
     beginRound();
+  }
+
+  /** Exhibition : un match libre en 15 points, sans cartes ni protocole. */
+  const OPP_DESC = { rookie: 'BW-01 · lent et hésitant', pro: 'RG-02 · solide, il smashe', elite: 'RG-03 · volant, très rapide', boss: 'ZG-04 · deux raquettes, sans pitié' };
+  function showOpponents() {
+    $('oppList').innerHTML = RS.DIFF_ORDER.map((k) => {
+      const d = RS.DIFFICULTY[k];
+      return `<button class="choice" data-key="${k}">
+        <span class="ico">🤖</span>
+        <span class="txt"><span class="nm" style="color:${d.color}">${d.name}</span><span class="ds">${OPP_DESC[k]}</span></span>
+      </button>`;
+    }).join('');
+    for (const btn of $('oppList').querySelectorAll('.choice')) {
+      btn.addEventListener('click', () => {
+        sfx.unlock();
+        handicapShown = null;
+        settings.difficulty = btn.dataset.key; saveSettings();
+        game.startExhibition(settings);
+        beginRound();
+      });
+    }
+    showPanel('opponents');
   }
 
   /** Reprend la partie après le menu ou après un choix de carte. */
@@ -141,12 +165,14 @@
 
   $('playBtn').addEventListener('click', startRun);
   $('malusBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
+  $('exhibBtn').addEventListener('click', showOpponents);
+  $('oppBack').addEventListener('click', () => showPanel('menu'));
   $('helpBtn').addEventListener('click', () => showPanel('help'));
   $('helpBack').addEventListener('click', () => showPanel('menu'));
   $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); deckBig($('pauseDeck')); showPanel('pause'); } });
   $('resumeBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
   $('quitBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
-  $('replayBtn').addEventListener('click', startRun);
+  $('replayBtn').addEventListener('click', () => { if (game.run.solo) { game.startExhibition(settings); beginRound(); } else startRun(); });
   $('menuBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === 'p') {
@@ -184,7 +210,9 @@
     if (game.state === 'menu') return;
     $('scoreYou').textContent = RS.fmtScore(game.score[0]);
     $('scoreBot').textContent = RS.fmtScore(game.score[1]);
-    $('stage').textContent = `NIVEAU ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`;
+    $('stage').textContent = game.run.solo
+      ? `EXHIBITION · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`
+      : `NIVEAU ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
     heatPct.textContent = p.energy.toFixed(0) + '%';
@@ -201,15 +229,17 @@
 
   function showEnd() {
     const won = game.phase === 'won';
-    $('endTitle').textContent = won ? '🏆 RUN TERMINÉE' : '💀 RUN PERDUE';
+    const solo = game.run.solo;
+    $('endTitle').textContent = solo ? (won ? '🏆 VICTOIRE' : '💀 DÉFAITE') : (won ? '🏆 RUN TERMINÉE' : '💀 RUN PERDUE');
     $('endTitle').style.color = won ? '#5dff7a' : '#ff5e5e';
-    $('endScore').textContent = won
-      ? 'Les 4 niveaux sont tombés'
-      : `Niveau ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`;
+    $('endScore').textContent = solo
+      ? `${game.diff.name} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`
+      : won ? 'Les 4 niveaux sont tombés'
+            : `Niveau ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`;
     const p = game.player;
     const m = Math.floor(game.matchTime / 60), s = Math.floor(game.matchTime % 60);
     const rows = [
-      ['Niveaux franchis', game.run.levels],
+      [game.run.solo ? 'Adversaire' : 'Niveaux franchis', game.run.solo ? game.diff.name : game.run.levels],
       ['Durée', `${m}:${String(s).padStart(2, '0')}`],
       ['Frappes', p.stats.hits],
       ['Parfaites', p.stats.perfect],

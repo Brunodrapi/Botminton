@@ -30,6 +30,13 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
+## Deux modes
+
+- **Rogue lite** : les 4 adversaires à la suite, avec les cartes et le protocole du boss.
+- **Exhibition** : un match libre en 15 points contre l'adversaire de ton choix, sans carte ni protocole.
+
+L'aide « zone d'arrivée du volant » du menu équivaut au premier niveau de la carte Optique prédictive.
+
 ## Structure de la run
 
 | Étape | Contenu |

@@ -220,7 +220,8 @@
       b.drawImage(this.courtLayer, this.shakeX, this.shakeY);
       if (game.state !== 'menu') {
         const s = game.shuttle;
-        if (game.assist && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing);
+        const eyes = game.eyesLv ? game.eyesLv() : 0;
+        if (eyes > 0 && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing, eyes);
         this.drawShadow(s);
         this.drawSweet(game.player);
         this.drawRobot(game.bot, game);
@@ -349,13 +350,15 @@
     drawLanding(l, lv) {
       const b = this.bctx;
       const p = this.px(l.x, 0, l.z);
-      const rm = [0, 1.1, 0.7, 0.35][Math.min(3, lv)];
+      const rm = [1.1, 1.1, 0.7, 0.35][Math.max(0, Math.min(3, lv | 0))];
       const rx = rm * this.KX, ry = rm * this.KZ;
       b.save();
       b.strokeStyle = lv >= 3 ? '#68f878' : '#f8d848';
       b.globalAlpha = 0.5 + 0.25 * Math.sin(this.time * 6);
       b.lineWidth = 1;
-      b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, Math.max(2, rx), Math.max(1, ry), 0, 0, Math.PI * 2); b.stroke();
+      b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, Math.max(3, rx), Math.max(2, ry), 0, 0, Math.PI * 2);
+      b.globalAlpha *= 0.35; b.fillStyle = b.strokeStyle; b.fill();
+      b.globalAlpha /= 0.35; b.stroke();
       if (lv >= 3) { b.globalAlpha = 1; b.fillStyle = '#68f878'; b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 1, 1, 3); }
       b.restore();
     }

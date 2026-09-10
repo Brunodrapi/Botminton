@@ -117,6 +117,14 @@
       this.phase = null;
     }
 
+    /** Match libre contre l'adversaire choisi, sans cartes ni protocole. */
+    startExhibition(opts) {
+      this.chassisKey = opts.chassis || 'balanced';
+      this.assist = !!opts.assist;
+      this.runTime = 0;
+      this.startMatch({ chassis: this.chassisKey, difficulty: opts.difficulty || 'rookie', assist: this.assist });
+    }
+
     /** Démarre une run complète : quatre niveaux de trois manches. */
     startRun(opts) {
       const start = DIFF_ORDER.indexOf(opts.difficulty);
@@ -141,8 +149,8 @@
       else { r.stage++; this.winner = null; this.phase = null; this.setupServe(); }
     }
 
-    /** Palier de points à atteindre avant la prochaine carte. */
-    nextStep() { return CARD_STEPS[Math.min(this.run.stage, CARD_STEPS.length - 1)]; }
+    /** Palier de points à atteindre avant la prochaine carte (l'exhibition se joue d'une traite). */
+    nextStep() { return this.run.solo ? LEVEL_TARGET : CARD_STEPS[Math.min(this.run.stage, CARD_STEPS.length - 1)]; }
     handicapIs(k) { return !!(this.run.handicap && this.run.handicap.key === k); }
     /** Le volant survolté avance plus vite que le reste du jeu. */
     shuttleRate() { return this.handicapIs('fast') ? 1.3 : 1; }
@@ -782,6 +790,7 @@
       this.winner = w;
       this.state = 'end';
       if (w === 1) this.phase = 'lost';                                   // le bot a atteint 15 : la run s'arrête
+      else if (this.run.solo) this.phase = 'won';                         // exhibition : le match s'arrête là
       else {
         const lastStep = this.run.stage >= CARD_STEPS.length - 1;
         const lastLevel = this.run.level >= DIFF_ORDER.length - 1;
