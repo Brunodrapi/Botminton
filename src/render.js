@@ -58,13 +58,12 @@
       this.w = 0; this.h = 0; this.dpr = 1; this.scale = 2;
       this.area = { top: 0, bottom: 0 };
       this.spriteCache = new Map();
-      this.tints = new Map();
+      this.atlases = {};                                   // une planche par robot : { img, frames, tints }
       this.shuttleFrames = null;
-      this.atlas = null;
-      if (ATLAS) {
+      for (const key in (ATLAS || {})) {
         const img = new Image();
-        img.onload = () => { this.atlas = img; this.buildShuttleFrames(); };
-        img.src = ATLAS.png;
+        img.onload = () => { this.atlases[key] = { img, frames: ATLAS[key].frames, tints: new Map() }; if (key === 'rg-b1') this.buildShuttleFrames(); };
+        img.src = ATLAS[key].png;
       }
       this.shakeX = 0; this.shakeY = 0;
       this.time = 0;
@@ -115,13 +114,14 @@
 
     /* ---------------------------------------------------------------- atlas : teintes et volant */
     /** Copie de l'atlas où les verts du châssis prennent la teinte demandée (le bot, ou un autre châssis). */
-    tinted(color) {
-      if (!color) return this.atlas;
-      let c = this.tints.get(color);
+    tinted(sheet, color) {
+      const a = this.atlases[sheet];
+      if (!color) return a.img;
+      let c = a.tints.get(color);
       if (c) return c;
-      c = document.createElement('canvas'); c.width = this.atlas.width; c.height = this.atlas.height;
+      c = document.createElement('canvas'); c.width = a.img.width; c.height = a.img.height;
       const ctx = c.getContext('2d');
-      ctx.drawImage(this.atlas, 0, 0);
+      ctx.drawImage(a.img, 0, 0);
       const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data;
       const n = parseInt(color.slice(1), 16);
       const [th, ts] = hslOf((n >> 16) & 255, (n >> 8) & 255, n & 255);
@@ -133,16 +133,17 @@
         d[i] = r; d[i + 1] = g; d[i + 2] = b;
       }
       ctx.putImageData(id, 0, 0);
-      this.tints.set(color, c);
+      a.tints.set(color, c);
       return c;
     }
 
     buildShuttleFrames() {
-      const f = ATLAS.frames.shuttle;
+      const a = this.atlases['rg-b1'];
+      const f = a.frames.shuttle;
       const base = document.createElement('canvas'); base.width = f.w; base.height = f.h;
       const bctx = base.getContext('2d');
       bctx.translate(f.w, 0); bctx.scale(-1, 1);            // le sprite pointe à gauche → base pointant à droite
-      bctx.drawImage(this.atlas, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      bctx.drawImage(a.img, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
       const size = Math.ceil(Math.hypot(f.w, f.h)) + 2;
       this.shuttleFrames = [];
       for (let i = 0; i < SHUTTLE_ANGLES; i++) {
@@ -157,12 +158,13 @@
     }
 
     /** Dessine un sprite de l'atlas, ancre (pieds) en (x, y). flip = miroir horizontal. */
-    drawSprite(name, x, y, flip, src) {
-      const f = ATLAS.frames[name];
-      if (!f || !this.atlas) return;
+    drawSprite(sheet, name, x, y, flip, src) {
+      const a = this.atlases[sheet];
+      const f = a && a.frames[name];
+      if (!f) return;
       const b = this.bctx;
       const ax = CENTER_ANCHOR[name] ? Math.round(f.w / 2) : f.ax;
-      const img = src || this.atlas;
+      const img = src || a.img;
       if (flip) {
         b.save(); b.translate(x, 0); b.scale(-1, 1);
         b.drawImage(img, f.x, f.y, f.w, f.h, -(f.w - ax), y - f.ay, f.w, f.h);
@@ -361,15 +363,15 @@
       // ombre au sol
       b.fillStyle = PAL.shadow;
       b.fillRect(p.x - 6, p.y - 1, 13, 1); b.fillRect(p.x - 8, p.y, 17, 1); b.fillRect(p.x - 6, p.y + 1, 13, 1);
-      if (!this.atlas) return;
+      const sheet = r.sheet || 'rg-b1';
+      if (!this.atlases[sheet]) return;
 
       const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 14) : 0;
       const bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
       const { name, flip } = this.robotPose(r, game);
-      const tint = (r.isAI || r.chassis.key !== 'balanced') ? r.color : null;
-      const src = tint ? this.tinted(tint) : this.atlas;
+      const src = this.tinted(sheet, r.tint ? r.color : null);
       if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;
-      this.drawSprite(name, p.x, p.y - jump - bob, flip, src);
+      this.drawSprite(sheet, name, p.x, p.y - jump - bob, flip, src);
       b.globalAlpha = 1;
 
       // barre de préparation du smash (joueur)
