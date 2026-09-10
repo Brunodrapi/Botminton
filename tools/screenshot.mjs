@@ -26,9 +26,11 @@ page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url);
 await page.waitForTimeout(400);
-if (process.env.DIFF) await page.evaluate((d) => { window.__rogueShuttle.settings.difficulty = d; }, process.env.DIFF);
+if (process.env.DIFF) await page.evaluate((d) => { const s = window.__rogueShuttle.settings; s.difficulty = d; s.startLevel = ['rookie', 'pro', 'elite', 'boss'].indexOf(d); }, process.env.DIFF);
 await page.screenshot({ path: `${out}/1-menu.png` });
 await page.click('#playBtn');
+await page.waitForTimeout(200);
+await page.click('#chassisGo');
 await page.waitForTimeout(300);
 await page.screenshot({ path: `${out}/2-serve.png` });
 // service long puis on laisse l'échange se dérouler avec un joueur scripté

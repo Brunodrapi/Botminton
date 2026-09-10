@@ -127,8 +127,9 @@
 
     /** Démarre une run complète : quatre niveaux de trois manches. */
     startRun(opts) {
-      const start = DIFF_ORDER.indexOf(opts.difficulty);
-      this.run = { level: start > 0 ? start : 0, stage: 0, cards: {}, racket: {}, handicap: null, levels: 0 };
+      // startLevel n'existe que pour les outils de capture : une run normale commence toujours au niveau 1.
+      const start = clamp(Math.floor(opts.startLevel || 0), 0, DIFF_ORDER.length - 1);
+      this.run = { level: start, stage: 0, cards: {}, racket: {}, handicap: null, levels: 0 };
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
       this.runTime = 0;

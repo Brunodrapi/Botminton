@@ -103,10 +103,14 @@ for (const diff of ['rookie', 'pro', 'elite']) {
 
 // Le boss impose un protocole, et le score repart de zéro au niveau suivant
 {
-  const g = new RS.Game(); g.startRun({ chassis: 'balanced', difficulty: 'boss' });
+  const g = new RS.Game(); g.startRun({ chassis: 'balanced', startLevel: 3 });
   check('boss level draws a handicap', !!g.run.handicap, g.run.handicap && g.run.handicap.name);
   const g2 = new RS.Game(); g2.startRun({ chassis: 'balanced' });
   check('early levels have no handicap', !g2.run.handicap);
+  const g3 = new RS.Game(); g3.startExhibition({ chassis: 'balanced', difficulty: 'boss' });
+  const g4 = new RS.Game(); g4.startRun({ chassis: 'balanced', difficulty: 'boss' });
+  check('a run always starts at level 1', g4.run.level === 0 && g4.diff.key === 'rookie', `${g4.run.level} ${g4.diff.key}`);
+  check('exhibition honours the chosen opponent', g3.diff.key === 'boss');
   for (let i = 0; i < 3; i++) { g2.score = [g2.nextStep(), 4]; g2.nextRally(); g2.advance(); }
   check('next opponent starts at 0', g2.score[0] === 0 && g2.score[1] === 0 && g2.run.level === 1, `${g2.score.join('-')} niveau ${g2.run.level}`);
 }

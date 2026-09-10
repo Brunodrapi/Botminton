@@ -32,8 +32,8 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 
 ## Deux modes
 
-- **Rogue lite** : les 4 adversaires à la suite, avec les cartes et le protocole du boss.
-- **Exhibition** : un match libre en 15 points contre l'adversaire de ton choix, sans carte ni protocole.
+- **Rogue lite** : choix du châssis, puis les 4 adversaires à la suite, avec les cartes et le protocole du boss.
+- **Exhibition** : choix du châssis, puis de l'adversaire, pour un match libre en 15 points sans carte ni protocole.
 
 L'aide « zone d'arrivée du volant » du menu équivaut au premier niveau de la carte Optique prédictive.
 

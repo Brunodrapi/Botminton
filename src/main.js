@@ -42,11 +42,12 @@
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
   $('assistToggle').checked = !!settings.assist;
   $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
-  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents'];
+  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis'];
+  const LOBBY = ['menu', 'help', 'chassis', 'opponents'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
-    $('hud').classList.toggle('hidden', name === 'menu' || name === 'help');
+    $('hud').classList.toggle('hidden', LOBBY.indexOf(name) >= 0);
     $('pad').classList.toggle('hidden', !playing);
     layout();
   }
@@ -56,6 +57,17 @@
     handicapShown = null;
     game.startRun(settings);
     beginRound();
+  }
+
+  /** Le châssis se choisit dans les deux modes, juste après le mode. */
+  let pendingMode = 'run';
+  function showChassis(mode) {
+    pendingMode = mode;
+    $('chassisSub').textContent = mode === 'run'
+      ? 'Rogue lite · il t\'accompagne pour toute la run'
+      : 'Exhibition · un match libre en 15 points';
+    $('chassisGo').textContent = mode === 'run' ? 'COMMENCER LA RUN' : 'CHOISIR L\'ADVERSAIRE';
+    showPanel('chassis');
   }
 
   /** Exhibition : un match libre en 15 points, sans cartes ni protocole. */
@@ -163,10 +175,12 @@
     beginRound();
   }
 
-  $('playBtn').addEventListener('click', startRun);
+  $('playBtn').addEventListener('click', () => showChassis('run'));
+  $('chassisGo').addEventListener('click', () => { sfx.unlock(); if (pendingMode === 'run') startRun(); else showOpponents(); });
+  $('chassisBack').addEventListener('click', () => showPanel('menu'));
   $('malusBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
-  $('exhibBtn').addEventListener('click', showOpponents);
-  $('oppBack').addEventListener('click', () => showPanel('menu'));
+  $('exhibBtn').addEventListener('click', () => showChassis('exhib'));
+  $('oppBack').addEventListener('click', () => showChassis('exhib'));
   $('helpBtn').addEventListener('click', () => showPanel('help'));
   $('helpBack').addEventListener('click', () => showPanel('menu'));
   $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); deckBig($('pauseDeck')); showPanel('pause'); } });
@@ -179,7 +193,7 @@
       if (game.state === 'paused') { game.resume(); showPanel(null); }
       else if (game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); }
     }
-    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) startRun();
+    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) showChassis('run');
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); } });
 
