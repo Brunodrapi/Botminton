@@ -284,27 +284,47 @@
         this.pxLine(ctx, [-W, 0, sgn * COURT.longServiceDoubles], [W, 0, sgn * COURT.longServiceDoubles], ln);
         this.pxLine(ctx, [0, 0, sgn * COURT.shortService], [0, 0, sgn * L], ln);
       }
-      // filet (calque séparé, dessiné entre les deux robots)
+      // Filet de badminton : la maille pend depuis la bande blanche et s'arrête bien au-dessus du sol
+      // (760 mm de chute réglementaires), contrairement à un filet de tennis qui touche le sol.
       const n = this.netLayer; n.width = this.bw; n.height = this.bh;
       const nctx = n.getContext('2d');
-      const a = this.px(-W, 0, 0), bb = this.px(W, 0, 0), t = this.px(-W, COURT.netHeight, 0), t2 = this.px(W, COURT.netHeight, 0);
-      const top = Math.min(t.y, t2.y), bottom = Math.max(a.y, bb.y);
-      for (let y = top; y <= bottom; y++) {
-        const k = (y - top) / Math.max(1, bottom - top);
-        const xl = Math.round(t.x + (a.x - t.x) * k), xr = Math.round(t2.x + (bb.x - t2.x) * k);
-        for (let x = xl; x <= xr; x++) if ((x + y) % 2 === 0) { nctx.fillStyle = PAL.net; nctx.fillRect(x, y, 1, 1); }
+      const NET_DROP = 0.76;
+      const xl = this.px(-W, 0, 0).x, xr = this.px(W, 0, 0).x;
+      const yTop = this.px(0, COURT.netHeight, 0).y;
+      const yMesh = this.px(0, Math.max(0, COURT.netHeight - NET_DROP), 0).y;
+      const yGround = this.px(0, 0, 0).y;
+      // maille fine : un point sombre un pixel sur deux, le terrain reste lisible au travers
+      for (let y = yTop + 2; y <= yMesh; y++) {
+        for (let x = xl; x <= xr; x++) {
+          if ((x + y) % 2) continue;
+          nctx.fillStyle = '#252b33';
+          nctx.fillRect(x, y, 1, 1);
+        }
       }
-      nctx.fillStyle = PAL.white; nctx.fillRect(t.x, top - 1, t2.x - t.x + 1, 2);
-      nctx.fillStyle = PAL.outline; nctx.fillRect(t.x, top - 2, t2.x - t.x + 1, 1);
-      for (const q of [t, t2]) { nctx.fillStyle = PAL.outline; nctx.fillRect(q.x - 1, top - 3, 3, bottom - top + 4); nctx.fillStyle = PAL.post; nctx.fillRect(q.x, top - 3, 1, bottom - top + 3); }
+      // bande blanche du haut, bordée de sombre
+      nctx.fillStyle = PAL.outline; nctx.fillRect(xl - 1, yTop - 2, xr - xl + 3, 1);
+      nctx.fillStyle = PAL.white; nctx.fillRect(xl, yTop - 1, xr - xl + 1, 3);
+      nctx.fillStyle = PAL.outline; nctx.fillRect(xl, yTop + 2, xr - xl + 1, 1);
+      // poteaux : eux descendent jusqu'au sol
+      for (const q of [xl, xr]) {
+        nctx.fillStyle = PAL.outline; nctx.fillRect(q - 1, yTop - 3, 3, yGround - yTop + 4);
+        nctx.fillStyle = PAL.post; nctx.fillRect(q, yTop - 3, 1, yGround - yTop + 3);
+      }
     }
 
-    drawLanding(l) {
+    /** Zone d'arrivée du volant (carte Optique prédictive) : large et floue au premier niveau, précise au troisième. */
+    drawLanding(l, lv) {
       const b = this.bctx;
       const p = this.px(l.x, 0, l.z);
-      if (Math.floor(this.time * 6) % 2) return;
-      b.fillStyle = '#f8f8f0';
-      b.fillRect(p.x - 3, p.y, 7, 1); b.fillRect(p.x, p.y - 2, 1, 5);
+      const rm = [0, 1.1, 0.7, 0.35][Math.min(3, lv)];
+      const rx = rm * this.KX, ry = rm * this.KZ;
+      b.save();
+      b.strokeStyle = lv >= 3 ? '#68f878' : '#f8d848';
+      b.globalAlpha = 0.5 + 0.25 * Math.sin(this.time * 6);
+      b.lineWidth = 1;
+      b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, Math.max(2, rx), Math.max(1, ry), 0, 0, Math.PI * 2); b.stroke();
+      if (lv >= 3) { b.globalAlpha = 1; b.fillStyle = '#68f878'; b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 1, 1, 3); }
+      b.restore();
     }
 
     drawShadow(s) {

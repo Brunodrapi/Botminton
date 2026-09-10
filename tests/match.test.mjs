@@ -71,12 +71,42 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   }
 }
 
-// Vérifie la règle de fin : 15 avec 2 d'écart, plafond 20
+// Manche courte : premier à 5 points
 {
   const g = new RS.Game(); g.startMatch({});
-  g.score = [15, 14]; check('15-14 not finished', g.matchWinner() === -1);
-  g.score = [16, 14]; check('16-14 finished', g.matchWinner() === 0);
-  g.score = [19, 20]; check('19-20 bot wins', g.matchWinner() === 1);
+  g.score = [4, 3]; check('4-3 not finished', g.matchWinner() === -1);
+  g.score = [5, 3]; check('5-3 finished', g.matchWinner() === 0);
+  g.score = [2, 5]; check('2-5 bot wins', g.matchWinner() === 1);
+}
+
+// Progression de la run : 3 manches par niveau, cartes après chacune, raquette à la troisième
+{
+  const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
+  const seen = [];
+  for (let i = 0; i < 6; i++) {
+    g.score = [RS.POINTS_TO_WIN, 0];
+    g.nextRally();
+    seen.push(`${g.run.level + 1}-${g.run.round + 1}:${g.phase}${g.pendingRacket ? '+raquette' : ''}`);
+    g.advance();
+  }
+  check('run advances through levels', seen.join(' ') === '1-1:cards 1-2:cards 1-3:cards+raquette 2-1:cards 2-2:cards 2-3:cards+raquette', seen.join(' '));
+}
+
+// Effet des cartes
+{
+  const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
+  const base = g.speedOf(g.player);
+  g.takeCard('speed'); g.takeCard('speed');
+  check('speed card raises movement', Math.abs(g.speedOf(g.player) - base * 1.24) < 1e-6, `${base.toFixed(2)} → ${g.speedOf(g.player).toFixed(2)}`);
+  g.takeCard('shuttle');
+  g.score = [0, 0]; g.endPoint(g.player, 'POINT !');
+  check('shuttle card gives 1.25 point', g.score[0] === 1.25, String(g.score[0]));
+  const charge = g.chargeTime(); g.takeCard('legs');
+  check('legs card shortens charge', g.chargeTime() < charge);
+  const reach = g.reachOf(g.player); g.takeRacket('reach');
+  check('racket lengthens reach', g.reachOf(g.player) > reach);
+  const [w0, w1] = g.hitWindow(); g.takeRacket('window');
+  check('racket widens hit window', g.hitWindow()[1] > w1 && g.hitWindow()[0] < w0);
 }
 console.log(fails ? `\n${fails} test(s) failed` : '\nall good');
 process.exit(fails ? 1 : 0);

@@ -39,17 +39,8 @@
       container.appendChild(b);
     }
   }
-  const diffDefs = {};
-  for (const k of RS.DIFF_ORDER) {
-    const d = RS.DIFFICULTY[k];
-    diffDefs[k] = { name: d.name, color: d.color, desc: [{ rookie: 'lent, hésitant', pro: 'solide, smashe', elite: 'volant, rapide', boss: '2 raquettes, sans pitié' }[k]] };
-  }
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
-  buildCards($('diffCards'), diffDefs, 'difficulty');
-  $('assistToggle').checked = !!settings.assist;
-  $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
-
-  const panels = ['menu', 'help', 'pause', 'end'];
+  const panels = ['menu', 'help', 'pause', 'end', 'choice'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -58,36 +49,87 @@
     layout();
   }
 
-  function startMatch() {
+  function startRun() {
     sfx.unlock();
-    game.startMatch(settings);
-    $('chassisName').textContent = RS.CHASSIS[settings.chassis].name;
-    $('diffName').textContent = RS.DIFFICULTY[settings.difficulty].name;
-    endShown = false;
-    showPanel(null);
+    game.startRun(settings);
+    beginRound();
   }
 
-  $('playBtn').addEventListener('click', startMatch);
+  /** Reprend la partie après le menu ou après un choix de carte. */
+  function beginRound() {
+    $('chassisName').textContent = RS.CHASSIS[settings.chassis].name;
+    $('diffName').textContent = game.diff.name;
+    endShown = false;
+    showPanel(null);
+    updateDeck();
+  }
+
+  /* ---------------------------------------------------------------- améliorations */
+  const ALL_UPS = RS.CARDS.concat(RS.RACKETS);
+  function upDef(k) { return ALL_UPS.find((u) => u.key === k); }
+  function ownedList() {
+    const r = game.run || { cards: {}, racket: {} };
+    return Object.keys(r.cards).map((k) => [k, r.cards[k]]).concat(Object.keys(r.racket).map((k) => [k, r.racket[k]]));
+  }
+  function updateDeck() {
+    const list = ownedList();
+    $('deck').classList.toggle('hidden', !list.length);
+    $('deck').innerHTML = list.map(([k, n]) => `<span class="chip">${upDef(k).icon}<b>${n}</b></span>`).join('');
+  }
+  function deckBig(el) {
+    const list = ownedList();
+    el.innerHTML = list.length
+      ? list.map(([k, n]) => `<span title="${upDef(k).name}">${upDef(k).icon}<b>${n}</b></span>`).join('')
+      : '<span style="font-size:7px">aucune amélioration</span>';
+  }
+
+  /** Écran de choix : trois cartes, ou trois modificateurs de raquette. */
+  function showChoice(kind) {
+    const isCard = kind === 'cards';
+    const list = isCard ? game.offerCards() : game.offerRackets();
+    if (!list.length) { afterChoice(kind); return; }
+    $('choiceTitle').textContent = isCard ? 'MANCHE GAGNÉE' : 'FIN DE NIVEAU';
+    $('choiceSub').textContent = isCard ? 'Choisis une pièce à monter' : 'Choisis un modificateur de raquette';
+    const owned = isCard ? game.run.cards : game.run.racket;
+    $('choiceList').innerHTML = list.map((u) => {
+      const n = (owned[u.key] || 0) + 1;
+      const pips = Array.from({ length: RS.UP_MAX }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
+      return `<button class="choice" data-key="${u.key}">
+        <span class="ico">${u.icon}</span>
+        <span class="txt"><span class="nm">${u.name}</span><span class="ds">${u.desc(n)}</span></span>
+        <span class="lv">${pips}</span>
+      </button>`;
+    }).join('');
+    for (const btn of $('choiceList').querySelectorAll('.choice')) {
+      btn.addEventListener('click', () => {
+        sfx.unlock();
+        if (isCard) game.takeCard(btn.dataset.key); else game.takeRacket(btn.dataset.key);
+        afterChoice(kind);
+      });
+    }
+    showPanel('choice');
+  }
+
+  function afterChoice(kind) {
+    if (kind === 'cards' && game.pendingRacket) { showChoice('racket'); return; }
+    game.advance();
+    beginRound();
+  }
+
+  $('playBtn').addEventListener('click', startRun);
   $('helpBtn').addEventListener('click', () => showPanel('help'));
   $('helpBack').addEventListener('click', () => showPanel('menu'));
-  $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); showPanel('pause'); } });
+  $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); deckBig($('pauseDeck')); showPanel('pause'); } });
   $('resumeBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
   $('quitBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
-  $('replayBtn').addEventListener('click', startMatch);
+  $('replayBtn').addEventListener('click', startRun);
   $('menuBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
-  $('nextBtn').addEventListener('click', () => {
-    const i = RS.DIFF_ORDER.indexOf(settings.difficulty);
-    settings.difficulty = RS.DIFF_ORDER[Math.min(RS.DIFF_ORDER.length - 1, i + 1)];
-    saveSettings();
-    buildCards($('diffCards'), diffDefs, 'difficulty');
-    startMatch();
-  });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === 'p') {
       if (game.state === 'paused') { game.resume(); showPanel(null); }
       else if (game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); }
     }
-    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) startMatch();
+    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) startRun();
   });
   document.addEventListener('visibilitychange', () => { if (document.hidden && game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); } });
 
@@ -116,8 +158,9 @@
   }
   function updateHud() {
     if (game.state === 'menu') return;
-    $('scoreYou').textContent = game.score[0];
-    $('scoreBot').textContent = game.score[1];
+    $('scoreYou').textContent = RS.fmtScore(game.score[0]);
+    $('scoreBot').textContent = RS.fmtScore(game.score[1]);
+    $('stage').textContent = `NIVEAU ${game.run.level + 1} · MANCHE ${game.run.round + 1} → ${RS.POINTS_TO_WIN}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
     heatPct.textContent = p.energy.toFixed(0) + '%';
@@ -127,14 +170,22 @@
     $('serveBot').classList.toggle('on', game.server === b);
   }
 
+  function onRoundEnd() {
+    if (game.phase === 'cards') showChoice('cards');
+    else showEnd();
+  }
+
   function showEnd() {
-    const won = game.winner === 0;
-    $('endTitle').textContent = won ? '🏆 VICTOIRE' : '💀 DÉFAITE';
+    const won = game.phase === 'won';
+    $('endTitle').textContent = won ? '🏆 RUN TERMINÉE' : '💀 RUN PERDUE';
     $('endTitle').style.color = won ? '#5dff7a' : '#ff5e5e';
-    $('endScore').textContent = `${game.score[0]} – ${game.score[1]}`;
+    $('endScore').textContent = won
+      ? `Les 4 niveaux sont tombés`
+      : `Niveau ${game.run.level + 1} · manche ${game.run.round + 1} · ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])}`;
     const p = game.player;
     const m = Math.floor(game.matchTime / 60), s = Math.floor(game.matchTime % 60);
     const rows = [
+      ['Manches gagnées', Math.max(0, game.run.rounds - (won ? 0 : 1))],
       ['Durée', `${m}:${String(s).padStart(2, '0')}`],
       ['Frappes', p.stats.hits],
       ['Parfaites', p.stats.perfect],
@@ -144,8 +195,7 @@
       ['Plus long échange', game.longestRally],
     ];
     $('endStats').innerHTML = rows.map(([k, v]) => `<div>${k} <b>${v}</b></div>`).join('');
-    const last = settings.difficulty === RS.DIFF_ORDER[RS.DIFF_ORDER.length - 1];
-    $('nextBtn').classList.toggle('hidden', !won || last);
+    deckBig($('endDeck'));
     showPanel('end');
   }
 
@@ -160,7 +210,7 @@
     game.events.length = 0;
     renderer.draw(game, dt);
     updateHud();
-    if (game.state === 'end' && !endShown) { endShown = true; showEnd(); }
+    if (game.state === 'end' && !endShown) { endShown = true; onRoundEnd(); }
     requestAnimationFrame(frame);
   }
 
@@ -173,5 +223,5 @@
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
-  window.__rogueShuttle = { game, renderer, input, settings, startMatch };
+  window.__rogueShuttle = { game, renderer, input, settings, startRun };
 })();

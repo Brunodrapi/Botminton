@@ -47,6 +47,32 @@
 
   const MAX_ENERGY = 100;      // jauge SUPER : se remplit sur les bons coups, se vide sur un super smash
 
+  /* --------------------------------------------------------------- roguelite */
+  const POINTS_TO_WIN = 5;     // manche courte : premier à 5 points
+  const ROUNDS_PER_LEVEL = 3;  // trois manches par niveau, une carte après chacune
+  const UP_MAX = 3;            // une amélioration se cumule trois fois au plus
+
+  // Cartes : pièces du robot, tirées trois par trois après chaque manche gagnée.
+  const CARDS = [
+    { key: 'speed',    icon: '🦾', name: 'SERVO DE COURSE',    desc: (n) => `+${12 * n} % de vitesse de déplacement` },
+    { key: 'power',    icon: '💥', name: 'BRAS HYDRAULIQUE',   desc: (n) => `+${15 * n} % de puissance de smash` },
+    { key: 'eyes',     icon: '👁', name: 'OPTIQUE PRÉDICTIVE', desc: (n) => ['', 'Zone d\'arrivée du volant', 'Zone d\'arrivée resserrée', 'Point d\'arrivée précis'][n] },
+    { key: 'legs',     icon: '🦿', name: 'VÉRIN DE JAMBE',     desc: (n) => `−${18 * n} % de temps de charge du smash` },
+    { key: 'thruster', icon: '🚀', name: 'PROPULSEUR DORSAL',  desc: (n) => `+${(0.25 * n).toFixed(2)} m de hauteur de smash` },
+    { key: 'shuttle',  icon: '🏸', name: 'VOLANT LESTÉ',       desc: (n) => `+${(0.25 * n).toFixed(2)} point par point gagné` },
+  ];
+  // Modificateurs de raquette : le bonus de fin de niveau.
+  const RACKETS = [
+    { key: 'reach',     icon: '📏', name: 'MANCHE ALLONGÉ', desc: (n) => `+${(0.18 * n).toFixed(2)} m d'allonge` },
+    { key: 'precision', icon: '🎯', name: 'CORDAGE TENDU',  desc: (n) => `−${30 * n} % de dispersion` },
+    { key: 'window',    icon: '🪶', name: 'TAMIS ÉLARGI',   desc: (n) => `+${Math.round(30 * n)} ms de fenêtre de frappe` },
+  ];
+
+  /** Affiche un score qui peut être fractionnaire (carte Volant lesté). */
+  function fmtScore(v) {
+    return Number.isInteger(v) ? String(v) : v.toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+  }
+
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -74,13 +100,60 @@
       this.hitStop = 0;
       this.robots = [];
       this.score = [0, 0];
+      this.run = { level: 0, round: 0, cards: {}, racket: {} };
+      this.phase = null;
     }
+
+    /** Démarre une run complète : quatre niveaux de trois manches. */
+    startRun(opts) {
+      const start = DIFF_ORDER.indexOf(opts.difficulty);
+      this.run = { level: start > 0 ? start : 0, round: 0, cards: {}, racket: {}, points: 0, rounds: 0 };
+      this.chassisKey = opts.chassis || 'balanced';
+      this.assist = !!opts.assist;
+      this.runTime = 0;
+      this.startRound();
+    }
+
+    /** Manche suivante : même adversaire tant que le niveau n'est pas fini. */
+    startRound() {
+      this.startMatch({ chassis: this.chassisKey, difficulty: DIFF_ORDER[Math.min(this.run.level, DIFF_ORDER.length - 1)], assist: this.assist, keepRun: true });
+    }
+
+    /** Passe à la manche ou au niveau suivant après le choix des cartes. */
+    advance() {
+      if (this.run.round >= ROUNDS_PER_LEVEL - 1) { this.run.round = 0; this.run.level++; }
+      else this.run.round++;
+      this.startRound();
+    }
+
+    /* --------------------------------------------------- améliorations acquises */
+    cardLv(k) { return this.run.cards[k] || 0; }
+    racketLv(k) { return this.run.racket[k] || 0; }
+    /** Niveau effectif de l'optique : la carte, ou l'aide activée dans le menu. */
+    eyesLv() { return Math.max(this.cardLv('eyes'), this.assist ? 1 : 0); }
+    chargeTime() { return CHARGE_TIME * (1 - 0.18 * this.cardLv('legs')); }
+    jumpReach() { return JUMP_REACH + 0.25 * this.cardLv('thruster'); }
+    hitWindow() { const w = 0.03 * this.racketLv('window'); return [SWING_HIT0 - w * 0.5, SWING_HIT1 + w]; }
+
+    /** Trois cartes tirées au hasard parmi celles qui ne sont pas au maximum. */
+    offer(list, owned) {
+      const pool = list.filter((c) => (owned[c.key] || 0) < UP_MAX);
+      const out = [];
+      while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
+      return out;
+    }
+    offerCards() { return this.offer(CARDS, this.run.cards); }
+    offerRackets() { return this.offer(RACKETS, this.run.racket); }
+    takeCard(k) { this.run.cards[k] = (this.run.cards[k] || 0) + 1; }
+    takeRacket(k) { this.run.racket[k] = (this.run.racket[k] || 0) + 1; }
 
     startMatch(opts) {
       this.chassisKey = opts.chassis || 'balanced';
       this.diffKey = opts.difficulty || 'rookie';
       this.diff = DIFFICULTY[this.diffKey];
       this.assist = !!opts.assist;
+      if (!opts.keepRun) this.run = { level: DIFF_ORDER.indexOf(this.diffKey), round: 0, cards: {}, racket: {}, points: 0, rounds: 0, solo: true };
+      this.phase = null;
       this.robots = [makeRobot(-1, this.chassisKey, false), makeRobot(1, this.diff.chassis, true)];
       this.robots[1].color = this.diff.color; this.robots[1].accent = '#ffd6e6';
       this.robots[0].sheet = 'rg-b1'; this.robots[0].tint = this.chassisKey !== 'balanced';
@@ -181,7 +254,7 @@
       // Un coup dont la fenêtre de contact est passée sans toucher : frappe dans le vide.
       for (const r of this.robots) {
         const a = r.act;
-        if (a && !a.dive && this.time - a.t0 > SWING_HIT1) this.whiff(r);
+        if (a && !a.dive && this.time - a.t0 > (r.isAI ? SWING_HIT1 : this.hitWindow()[1])) this.whiff(r);
       }
 
       for (const f of this.fx) f.t += dt;
@@ -217,7 +290,7 @@
       if (p.hold && !input.held[p.hold.btn]) {
         const h = p.hold; p.hold = null;
         if (!p.act && p.swing <= 0) {
-          const charged = h.btn === 'A' && this.time - h.t0 >= CHARGE_TIME;
+          const charged = h.btn === 'A' && this.time - h.t0 >= this.chargeTime();
           this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, dirZ: mz });
         }
       }
@@ -249,7 +322,8 @@
       if (!h || h.btn !== 'A') return -1;
       const held = this.time - h.t0;
       if (held < TAP_TIME) return -1;
-      return clamp((held - TAP_TIME) / (CHARGE_TIME - TAP_TIME), 0, 1);
+      const full = r.isAI ? CHARGE_TIME : this.chargeTime();
+      return clamp((held - TAP_TIME) / (full - TAP_TIME), 0, 1);
     }
 
     /** Lance un coup de raquette. Il ne touchera que si le volant passe dans sa fenêtre de contact. */
@@ -272,8 +346,14 @@
         this.addFx('DANS LE VIDE', r.x, 1.9, r.z, '#9aa4c0', 0.7, 15);
     }
 
-    speedOf(r) { return r.isAI ? this.diff.speed : r.chassis.speed; }
-    reachOf(r) { return r.isAI && this.diff.reach ? this.diff.reach : r.chassis.reach; }
+    speedOf(r) {
+      if (r.isAI) return (this.diff.reach ? this.diff.speed : this.diff.speed) * (1 + 0.04 * this.run.round);  // le bot durcit d'une manche à l'autre
+      return r.chassis.speed * (1 + 0.12 * this.cardLv('speed'));
+    }
+    reachOf(r) {
+      if (r.isAI) return this.diff.reach || r.chassis.reach;
+      return r.chassis.reach + 0.18 * this.racketLv('reach');
+    }
 
     /** Point d'interception sur la trajectoire prédite, et s'il est atteignable en courant. */
     interceptInfo(r) {
@@ -399,13 +479,14 @@
         const a = r.act;
         if (!a || this.lastHitter === r) continue;
         const age = this.time - a.t0;
+        const [w0, w1] = r.isAI ? [SWING_HIT0, SWING_HIT1] : this.hitWindow();
         if (a.dive) { if (r.dive && r.dive.t > DIVE_LUNGE) continue; }
-        else if (age < SWING_HIT0 || age > SWING_HIT1) continue;   // hors de la fenêtre de contact
+        else if (age < w0 || age > w1) continue;                   // hors de la fenêtre de contact
         if (s.z * r.side < -0.25) { a.lastD = null; continue; }
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const maxY = a.shot === 'smash' ? JUMP_REACH : 2.6;
+        const maxY = a.shot === 'smash' ? (r.isAI ? JUMP_REACH : this.jumpReach()) : 2.6;
         let reach = this.reachOf(r);
         if (r.dive) reach += DIVE_REACH;
         const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
@@ -413,7 +494,7 @@
         const closest = a.lastD !== null && d >= a.lastD;
         const passing = (s.z - r.z) * r.side > 0.3;
         const low = s.y < 0.25;
-        const ending = !a.dive && age >= SWING_HIT1 - 0.03;        // dernière chance avant la fin du geste
+        const ending = !a.dive && age >= w1 - 0.03;                 // dernière chance avant la fin du geste
         a.lastD = d;
         if (d <= 0.25 || closest || passing || low || ending) { this.hit(r, d); return; }
       }
@@ -422,7 +503,8 @@
     hit(r, d) {
       const s = this.shuttle;
       const a = r.act; r.act = null; r.hold = null;
-      const place = d <= 0.6 ? 2 : d <= 1.05 ? 1 : 0;
+      const wide = r.isAI ? 0 : 0.09 * this.racketLv('window');
+      const place = d <= 0.6 + wide ? 2 : d <= 1.05 + wide ? 1 : 0;
       let level = place;                       // la qualité tient au placement ; le timing décide déjà si on touche
       if (r.isAI) level = this.aiLevel(level);
 
@@ -488,7 +570,7 @@
       } else {
         aimX = (aim || 0) * 2.1;
       }
-      const noise = [1.3, 0.5, 0.15][level] * (r.isAI ? this.diff.aimNoise : 1);
+      const noise = [1.3, 0.5, 0.15][level] * (r.isAI ? this.diff.aimNoise : Math.max(0, 1 - 0.3 * this.racketLv('precision')));
       const tx = clamp(aimX, -2.2, 2.2) + rnd(-noise, noise);
       const y = s.y;
       let spec;
@@ -514,11 +596,11 @@
           break;
         }
         case 'smash': {
-          if (sup) { spec = { mode: 'speed', speed: 34 * r.chassis.smash, target: { x: tx, z: far * 2.9 }, clearance: 0.08 }; break; }
+          if (sup) { spec = { mode: 'speed', speed: 34 * r.chassis.smash * (r.isAI ? 1 : 1 + 0.15 * this.cardLv('power')), target: { x: tx, z: far * 2.9 }, clearance: 0.08 }; break; }
           if (level === 0) {
             spec = { mode: 'angle', angle: 18, target: { x: tx, z: far * 4.8 }, clearance: 0.45 };
           } else {
-            let speed = (level === 2 ? 27 : 22) * r.chassis.smash;
+            let speed = (level === 2 ? 27 : 22) * r.chassis.smash * (r.isAI ? 1 : 1 + 0.15 * this.cardLv('power'));
             spec = { mode: 'speed', speed, target: { x: tx, z: far * (level === 2 ? 3.3 : 4.3) }, clearance: level === 2 ? 0.1 : 0.3 };
           }
           break;
@@ -654,7 +736,8 @@
 
     endPoint(winner, reason) {
       const idx = winner === this.robots[0] ? 0 : 1;
-      this.score[idx]++;
+      // Le volant lesté fait rapporter davantage chaque point gagné par le joueur.
+      this.score[idx] += idx === 0 ? 1 + 0.25 * this.cardLv('shuttle') : 1;
       this.state = 'point';
       this.pointTimer = 1.5;
       this.pointWinner = winner;
@@ -667,20 +750,26 @@
 
     matchWinner() {
       const [a, b] = this.score;
-      if ((a >= 15 && a - b >= 2) || a === 20) return 0;
-      if ((b >= 15 && b - a >= 2) || b === 20) return 1;
+      if (a >= POINTS_TO_WIN) return 0;
+      if (b >= POINTS_TO_WIN) return 1;
       return -1;
     }
 
     nextRally() {
       const w = this.matchWinner();
-      if (w >= 0) {
-        this.winner = w;
-        this.state = 'end';
-        this.events.push({ type: 'end', winner: w });
-        return;
+      if (w < 0) { this.setupServe(); return; }
+      this.winner = w;
+      this.state = 'end';
+      this.run.rounds++;
+      this.run.points += this.score[0];
+      if (w === 1) this.phase = 'lost';                                   // manche perdue : la run s'arrête
+      else {
+        const lastRound = this.run.round >= ROUNDS_PER_LEVEL - 1;
+        const lastLevel = this.run.level >= DIFF_ORDER.length - 1;
+        this.pendingRacket = lastRound;
+        this.phase = (lastRound && lastLevel) ? 'won' : 'cards';
       }
-      this.setupServe();
+      this.events.push({ type: 'end', winner: w, phase: this.phase });
     }
 
     /* ------------------------------------------------------------------ effets */
@@ -692,5 +781,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, POINTS_TO_WIN, ROUNDS_PER_LEVEL, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

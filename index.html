@@ -25,6 +25,7 @@
       <div class="score" id="scoreYou">0</div>
     </div>
     <div class="center">
+      <div class="stage" id="stage"></div>
       <div class="heat-label">SUPER <span id="heatPct">0%</span></div>
       <div class="heat-bar" id="heatBar"></div>
       <div class="heat-bar bot" id="heatBarBot"></div>
@@ -35,6 +36,8 @@
     </div>
     <button id="pauseBtn" aria-label="Pause">II</button>
   </div>
+
+  <div id="deck" class="hidden"></div>
 
   <div id="pad" class="hidden">
     <div id="dpadZone">
@@ -58,12 +61,11 @@
       <h2>Châssis</h2>
       <div class="cards" id="chassisCards"></div>
 
-      <h2>Adversaire</h2>
-      <div class="cards small" id="diffCards"></div>
+      <p class="tag run-note">4 niveaux · 3 manches de 5 points · une carte après chaque manche</p>
 
-      <label class="toggle"><input type="checkbox" id="assistToggle"> Afficher la zone d'atterrissage (aide)</label>
+      <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
 
-      <button id="playBtn" class="primary">JOUER</button>
+      <button id="playBtn" class="primary">COMMENCER LA RUN</button>
       <button id="helpBtn" class="ghost">Comment jouer ?</button>
     </div>
   </div>
@@ -82,18 +84,29 @@
         <li>Qualité = <b>placement</b>. Point idéal 35 cm devant le robot (la petite croix quand tu es armé).
           <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span>. Mal placé = faible, et parfois faute.</li>
         <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés (+11 pour un parfait), les smashs (+8) et les sauvetages (+12). Pleine, ton robot s'auréole : le prochain smash devient un <b>SUPER SMASH</b>, foudroyant, et vide la jauge.</li>
-        <li>Match : premier à <b>15</b>, deux points d'écart, plafond 20. Service : <b>A</b> court, <b>B</b> long.</li>
+        <li><b>Run</b> : 4 niveaux (Rookie, Pro, Elite, Boss), 3 manches par niveau, premier à <b>5 points</b>. Une manche perdue arrête la run.</li>
+        <li>Chaque manche gagnée donne le choix entre <b>3 cartes</b> qui améliorent le robot, cumulables 3 fois. La troisième manche d'un niveau ajoute un <b>modificateur de raquette</b>.</li>
+        <li>Service : <b>A</b> court, <b>B</b> long.</li>
         <li>Clavier : flèches / ZQSD pour bouger, <b>A</b> (ou X, espace) et <b>B</b> (ou C).</li>
       </ul>
       <button id="helpBack" class="primary">OK</button>
     </div>
   </div>
 
+  <div id="choice" class="panel hidden">
+    <div class="panel-inner">
+      <h1 id="choiceTitle">MANCHE GAGNÉE</h1>
+      <p class="tag" id="choiceSub">Choisis une pièce</p>
+      <div class="choices" id="choiceList"></div>
+    </div>
+  </div>
+
   <div id="pause" class="panel hidden">
     <div class="panel-inner">
       <h1>PAUSE</h1>
+      <div class="deck-big" id="pauseDeck"></div>
       <button id="resumeBtn" class="primary">Reprendre</button>
-      <button id="quitBtn" class="ghost">Retour au menu</button>
+      <button id="quitBtn" class="ghost">Abandonner la run</button>
     </div>
   </div>
 
@@ -102,8 +115,8 @@
       <h1 id="endTitle">VICTOIRE</h1>
       <p class="tag" id="endScore">15 – 9</p>
       <div class="stats" id="endStats"></div>
-      <button id="nextBtn" class="primary">Adversaire suivant</button>
-      <button id="replayBtn" class="ghost">Rejouer</button>
+      <div class="deck-big" id="endDeck"></div>
+      <button id="replayBtn" class="primary">Nouvelle run</button>
       <button id="menuBtn" class="ghost">Menu</button>
     </div>
   </div>

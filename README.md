@@ -1,7 +1,9 @@
 # 🤖🏸 Rogue Shuttle — prototype
 
-Badminton arcade avec des robots, jouable dans le navigateur (iPhone en priorité).
-Cette version est le **prototype de concept** : un match, premier à 15, sans les modules roguelite.
+Badminton arcade roguelite avec des robots, jouable dans le navigateur (iPhone en priorité).
+Une **run** enchaîne 4 niveaux (Rookie, Pro, Elite, Boss) de 3 manches en 5 points ; chaque manche
+gagnée offre le choix entre 3 cartes qui montent le robot, et la fin d'un niveau ajoute un
+modificateur de raquette. Une manche perdue arrête la run.
 
 ## Jouer
 
@@ -28,18 +30,45 @@ Le coup part **au relâchement** du bouton et la raquette balaie aussitôt : mal
 | Service | A court, B long |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
-## Systèmes du concept déjà présents
+## Structure de la run
+
+| Étape | Contenu |
+| --- | --- |
+| Manche | Premier à **5 points**. Le perdant arrête sa run |
+| Après chaque manche gagnée | Choix entre **3 cartes**, cumulables **3 fois** chacune |
+| Fin de niveau (3ᵉ manche) | Une carte **et** un modificateur de raquette |
+| Niveau suivant | Adversaire suivant ; le bot gagne aussi 4 % de vitesse par manche |
+
+### Cartes (pièces du robot)
+
+| Carte | Effet par niveau |
+| --- | --- |
+| 🦾 Servo de course | +12 % de vitesse de déplacement |
+| 💥 Bras hydraulique | +15 % de puissance de smash |
+| 👁 Optique prédictive | Ellipse d'arrivée du volant, de plus en plus resserrée |
+| 🦿 Vérin de jambe | −18 % de temps de charge du smash |
+| 🚀 Propulseur dorsal | +0,25 m de hauteur de smash rattrapable |
+| 🏸 Volant lesté | +0,25 point par point gagné |
+
+### Modificateurs de raquette (fin de niveau)
+
+| Modificateur | Effet par niveau |
+| --- | --- |
+| 📏 Manche allongé | +0,18 m d'allonge |
+| 🎯 Cordage tendu | −30 % de dispersion de la visée |
+| 🪶 Tamis élargi | +30 ms de fenêtre de frappe et zone parfaite plus large |
+
+## Systèmes de jeu
 
 - **Trois profondeurs par bouton** : la croix vers le bas joue court, au neutre mi-court, vers le haut au fond. Les diagonales gardent la profondeur et ajoutent la visée latérale.
 - **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et une fois sur trois c'est une faute.
   Le **smash** demande une charge de 0,42 s et un volant à plus de 1,75 m ; au-dessus de 2,5 m le robot saute.
-- **Hauteur du volant** : vraie trajectoire avec traînée aérodynamique ; dégagé, drive, amorti, smash ont des formes différentes.
 - **Jauge SUPER** : monte sur les coups bien placés (+3 pour un parfait), les smashs (+3), les sauts (+2) et les sauvetages (+5). Pleine, le robot s'auréole et son prochain smash devient un **SUPER SMASH** foudroyant qui vide la jauge.
+- **Plongeon** : déclenché à la pression quand le point d'interception est hors de portée en courant, à moins de 2,7 m et à moins de 0,9 s. Détente de 0,30 s avec 0,85 m d'allonge en plus, puis 0,67 s d'immobilisation. L'IA plonge aussi.
+- **Terrain** : dimensions réglementaires de simple, filet de badminton (bande haute à 1,55 m, maille de 760 mm qui ne descend pas au sol).
 - **Châssis** : Light / Balanced / Heavy (vitesse, puissance de smash, vitesse de charge de la jauge, allonge).
-- **Plongeon** : déclenché à la pression quand le point d'interception est hors de portée en courant, à moins de 2,7 m et à moins de 0,9 s. Détente de 0,30 s avec 0,85 m d'allonge en plus, puis 0,67 s d'immobilisation. L'IA plonge aussi, d'autant plus souvent que son niveau est élevé.
-- **Match à 15**, deux points d'écart, plafond 20, service par le gagnant de l'échange.
-- **IA** : Rookie / Pro / Elite / Boss (vitesse, réaction, agressivité, taux d'erreur) et **tempo** du jeu : robots et volant plus lents en Rookie, plus rapides en Elite.
+- **Adversaires** : Rookie (BW-01), Pro (RG-02), Elite (RG-03 volant), Boss (ZG-04), chacun avec sa planche de sprites, son tempo et son taux d'erreur.
 
 ## Code
 

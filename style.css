@@ -44,7 +44,8 @@ button { font-family: inherit; }
 #hud .score { font-size: 30px; line-height: 1; margin-top: 8px; color: #fff; font-variant-numeric: tabular-nums; }
 .serve-dot { width: 7px; height: 7px; background: var(--ink-soft); display: inline-block; }
 .serve-dot.on { background: var(--green); }
-#hud .center { flex: 1; padding: 4px 8px 0; }
+#hud .center { flex: 1; padding: 2px 8px 0; }
+.stage { font-size: 7px; color: var(--cyan); text-align: center; letter-spacing: 1px; margin-bottom: 3px; min-height: 9px; }
 .heat-label { font-size: 8px; color: var(--paper); text-align: center; letter-spacing: 1px; }
 .heat-bar { display: flex; gap: 2px; justify-content: center; margin-top: 6px; }
 .heat-bar i { display: block; width: 12px; height: 10px; background: var(--ink-soft); border: 1px solid var(--paper-dark); }
@@ -56,6 +57,16 @@ button { font-family: inherit; }
   pointer-events: auto; position: absolute; right: 8px; top: 56px; width: 28px; height: 22px;
   border: 2px solid var(--paper); background: var(--ink); color: var(--paper); font-size: 8px; padding: 0;
 }
+
+#deck {
+  position: absolute; left: calc(var(--sal) + 8px); top: calc(var(--sat) + 90px);
+  display: flex; gap: 3px; pointer-events: none;
+}
+#deck .chip {
+  display: flex; align-items: center; gap: 2px; padding: 2px 4px;
+  background: rgba(16,20,32,0.75); border: 1px solid var(--paper-dark); font-size: 9px; line-height: 1;
+}
+#deck .chip b { font-size: 7px; color: var(--yellow); font-weight: normal; }
 
 /* ------------------------------------------------------------------ pad façon Game Boy */
 #pad { position: absolute; left: var(--sal); right: var(--sar); bottom: 0; height: 224px; padding-bottom: var(--sab); }
@@ -136,6 +147,25 @@ ul.help { padding-left: 14px; margin: 12px 0 0; font-size: 7px; line-height: 1.9
 ul.help li { margin-bottom: 6px; }
 .q { padding: 0 4px; font-size: 6px; border: 2px solid var(--ink); }
 .q.red { background: var(--red); } .q.yellow { background: var(--yellow); } .q.green { background: var(--green); }
+.run-note { margin-top: 10px !important; line-height: 1.8; }
+.choices { display: grid; gap: 10px; margin-top: 14px; }
+.choice {
+  display: flex; align-items: center; gap: 10px; text-align: left; width: 100%;
+  border: 3px solid var(--ink); background: #fff8e8; color: var(--ink);
+  padding: 10px 10px; box-shadow: 4px 4px 0 var(--ink); cursor: pointer; font-family: inherit;
+}
+.choice:active { transform: translate(3px, 3px); box-shadow: 1px 1px 0 var(--ink); }
+.choice .ico { font-size: 22px; line-height: 1; }
+.choice .txt { flex: 1; }
+.choice .nm, .choice .ds { display: block; }
+.choice .nm { font-size: 8px; }
+.choice .ds { font-size: 6px; line-height: 1.7; margin-top: 5px; color: var(--ink-soft); }
+.choice .lv { font-size: 6px; color: var(--ink-soft); }
+.choice .lv i { display: inline-block; width: 6px; height: 6px; margin-left: 2px; background: var(--ink-soft); opacity: 0.3; }
+.choice .lv i.on { opacity: 1; background: #2a7a3a; }
+.deck-big { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; margin: 14px 0 4px; }
+.deck-big span { font-size: 16px; line-height: 1; }
+.deck-big b { font-size: 7px; font-weight: normal; vertical-align: super; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 14px 0 4px; font-size: 7px; }
 .stats b { float: right; font-weight: normal; }
 @media (prefers-reduced-motion: reduce) { .heat-bar.full i.on { animation: none; } }
