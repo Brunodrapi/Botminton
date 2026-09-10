@@ -353,7 +353,8 @@
       const rows = (front ? HEAD_FRONT : HEAD_BACK).concat(front ? TORSO_FRONT : TORSO_BACK, frame);
       const key = (front ? 'F' : 'B') + (moving ? (frame === LEGS_RUN_A ? 'a' : 'b') : 'i');
       const img = this.sprite(key, rows, pal, false);
-      const ox = p.x - 8, oy = p.y - 24;
+      const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 12) : 0;
+      const ox = p.x - 8, oy = p.y - 24 - jump;
       if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;
       b.drawImage(img, ox, oy);
       b.globalAlpha = 1;
@@ -361,6 +362,7 @@
       // raquette : main droite = à droite du sprite pour le joueur (vu de dos), à gauche pour le bot (de face)
       const dir = front ? -1 : 1;
       const handX = p.x + dir * 7, handY = oy + 12;
+      const armedSmash = r.armed && (r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A');
       let rk, rx, ry;
       const rpal = { k: PAL.outline, r: '#f0f0e8', s: '#8890a8', n: '#6a4a30' };
       if (r.swing > 0) {
@@ -370,8 +372,10 @@
         else if (u < 0.3) { rk = RACKET_UP; rx = handX - 4; ry = oy - 10; }
         else if (u < 0.65) { rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = oy - 1; }
         else { rk = RACKET_DOWN; rx = handX + dir * 2 - 4; ry = handY + 2; }
-      } else if (r.armed) {
+      } else if (r.armed && armedSmash) {
         rk = RACKET_UP; rx = handX + dir * 2 - 4; ry = oy - 9 + (Math.floor(this.time * 8) % 2);
+      } else if (r.armed) {
+        rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = handY - 1;
       } else {
         rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 3 - 4; ry = handY + 4;
       }
@@ -379,7 +383,7 @@
       b.drawImage(this.sprite(rkey, rk, rpal, false), Math.round(rx), Math.round(ry));
 
       // barre de charge pendant l'armement
-      if (r.armed && !r.isAI) {
+      if (r.armed && !r.isAI && armedSmash) {
         const k = clamp((this.gameTime - r.armed.t0) / RS.CHARGE_TIME, 0, 1);
         b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
         b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * k), 2);

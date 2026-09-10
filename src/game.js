@@ -25,7 +25,9 @@
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
-  const CHARGE_TIME = 0.3;     // maintenir le bouton au moins 0,3 s avant l'impact = frappe chargée
+  const CHARGE_TIME = 0.3;     // maintenir A au moins 0,3 s avant l'impact = smash préparé
+  const JUMP_REACH = 3.3;      // hauteur max atteignable en sautant pour smasher
+  const JUMP_TIME = 0.45;
   const MAX_HEAT = 100;
   const OVERHEAT_TIME = 3.0;
 
@@ -37,7 +39,7 @@
       side, isAI, chassis: CHASSIS[chassisKey], color: CHASSIS[chassisKey].color, accent: CHASSIS[chassisKey].accent,
       x: 0, z: side * 3.5, vx: 0, vz: 0, moveX: 0, moveZ: 0, walk: 0,
       heat: 0, overheat: 0, overheats: 0,
-      armed: null, swing: 0, swingShot: null, swingLevel: 1,
+      armed: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0,
       stats: { hits: 0, perfect: 0, smashes: 0, maxHeat: 0 },
       ai: { reactAt: 0, shot: null, noiseX: 0, judgedOut: false, target: null },
     };
@@ -112,7 +114,7 @@
       const gdt = dt * (this.diff.tempo || 1);   // tempo du niveau : tout le jeu ralentit ou accélère
       this.updatePlayerInput(input);
       this.updateAI(dt);
-      for (const r of this.robots) { this.moveRobot(r, gdt); this.updateHeat(r, dt); if (r.swing > 0) r.swing -= dt; }
+      for (const r of this.robots) { this.moveRobot(r, gdt); this.updateHeat(r, dt); if (r.swing > 0) r.swing -= dt; if (r.jumpT > 0) r.jumpT -= dt; }
 
       const s = this.shuttle;
       if (this.state === 'serve') {
@@ -178,8 +180,15 @@
       const y = this.shuttle.y;
       const up = (r.dirZ || 0) > 0.5;
       if (btn === 'B') return up ? 'attack' : 'clear';
-      if (charged && y >= 1.75) return 'smash';
+      if (charged && y >= 1.75) return 'smash';   // seule frappe qui demande une préparation
       return up ? 'drop' : 'drive';
+    }
+
+    /** Un robot prêt à smasher (A maintenu assez longtemps) peut sauter pour aller chercher un volant plus haut. */
+    smashReady(r) {
+      if (!r.armed) return false;
+      const wantsSmash = r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A';
+      return wantsSmash && (this.time - r.armed.t0) >= CHARGE_TIME && r.overheat <= 0;
     }
 
     /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
@@ -273,7 +282,8 @@
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - r.x, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const inReach = dr <= r.chassis.reach && s.y <= 2.6 && s.y > 0.12;
+        const maxY = this.smashReady(r) ? JUMP_REACH : 2.6;
+        const inReach = dr <= r.chassis.reach && s.y <= maxY && s.y > 0.12;
         if (!inReach) { r.armed.lastD = null; continue; }
         const a = r.armed;
         const closest = a.lastD !== null && d >= a.lastD;
@@ -290,14 +300,18 @@
       const hold = this.time - a.t0;
       const place = d <= 0.6 ? 2 : d <= 1.05 ? 1 : 0;
       const charged = hold >= CHARGE_TIME;
-      let level = Math.min(place, charged ? 2 : 1);
+      let level = place;                       // la qualité ne dépend que du placement…
       if (r.isAI) level = this.aiLevel(level);
 
       let shot = r.isAI ? a.shot : this.resolveShot(r, a.btn, charged);
       let note = null;
+      if (shot === 'smash' && !charged) { shot = 'drive'; note = 'PRÉCIPITÉ'; }   // …sauf le smash, qui exige la préparation
       if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS → DRIVE'; }
+      const jump = shot === 'smash' && s.y > 2.5;
+      if (jump) { r.jumpT = JUMP_TIME; note = 'JUMP SMASH!'; }
 
       const spec = this.shotSpec(r, shot, level);
+      if (jump && spec.mode === 'speed') spec.speed *= 1.1;
       spec.from = { x: s.x, y: s.y, z: s.z };
       const plan = P.planShot(spec);
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
@@ -317,8 +331,8 @@
       else if (shot === 'clear') this.addHeat(r, -4);
       else if (shot === 'attack') this.addHeat(r, 0);
 
-      const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : (!charged && place === 2 ? 'PRÉCIPITÉ' : SHOT_NAMES[shot]));
-      this.addFx(label, s.x, s.y + 0.3, s.z, LEVEL_COLORS[level], r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
+      const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : SHOT_NAMES[shot]);
+      this.addFx(label, s.x, s.y + 0.3, s.z, jump ? '#f8f8f0' : LEVEL_COLORS[level], r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
       this.events.push({ type: 'hit', shot, level, robot: r });
       this.onHitFor(this.other(r));
     }
@@ -515,5 +529,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, CHARGE_TIME };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, CHARGE_TIME, JUMP_TIME };
 })(typeof window !== 'undefined' ? window : globalThis);
