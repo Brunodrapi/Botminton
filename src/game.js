@@ -99,6 +99,7 @@
       this.serveInFlight = false;
       this.rallyHits = 0;
       this.state = 'serve';
+      this.pointWinner = null;
       this.serveTimer = srv.isAI ? rnd(0.9, 1.5) : 0;
       this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A COURT  B LONG', t: 0 };
     }
@@ -495,6 +496,7 @@
       this.score[idx]++;
       this.state = 'point';
       this.pointTimer = 1.5;
+      this.pointWinner = winner;
       this.server = winner;
       for (const r of this.robots) r.armed = null;
       const good = idx === 0;

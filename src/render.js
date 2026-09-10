@@ -19,99 +19,27 @@
   const cross = (a, b) => ({ x: a.y * b.z - a.z * b.y, y: a.z * b.x - a.x * b.z, z: a.x * b.y - a.y * b.x });
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  /* ------------------------------------------------------------------ sprites */
-  const HEAD_BACK = [
-    '.....kkkkkk.....',
-    '....kllllllk....',
-    '....kggggggk....',
-    '....kggggggk....',
-    '....kggggggk....',
-    '....kkkkkkkk....',
-    '......kddk......',
-  ];
-  const HEAD_FRONT = [
-    '.....kkkkkk.....',
-    '....kggggggk....',
-    '....kvvvvvvk....',
-    '....kvvvvvvk....',
-    '....kggggggk....',
-    '....kkkkkkkk....',
-    '......kddk......',
-  ];
-  const TORSO_BACK = [
-    '...kkbbbbbbkk...',
-    '..kbkbbbbbbkbk..',
-    '..kbkbhhhhbkbk..',
-    '..kbkbhhhhbkbk..',
-    '..kbkbhhhhbkbk..',
-    '..kbkbbbbbbkbk..',
-    '..kkkbbbbbbkkk..',
-    '....kbbbbbbk....',
-    '....kkkkkkkk....',
-  ];
-  const TORSO_FRONT = [
-    '...kkbbbbbbkk...',
-    '..kbkbbbbbbkbk..',
-    '..kbkbbllbbkbk..',
-    '..kbkbbllbbkbk..',
-    '..kbkbbllbbkbk..',
-    '..kbkbbbbbbkbk..',
-    '..kkkbbbbbbkkk..',
-    '....kbbbbbbk....',
-    '....kkkkkkkk....',
-  ];
-  const LEGS_IDLE = [
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '..kbbbk..kbbbk..',
-    '..kkkkk..kkkkk..',
-  ];
-  const LEGS_RUN_A = [
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '...kddk..kddk...',
-    '..kbbbk..kddk...',
-    '..kkkkk..kddk...',
-    '.........kddk...',
-    '.........kbbbk..',
-    '.........kkkkk..',
-  ];
-  const LEGS_RUN_B = LEGS_RUN_A.map((r) => r.split('').reverse().join(''));
-  const RACKET_UP = [
-    '..kkkkk..',
-    '.krsrsrk.',
-    '.krrrrrk.',
-    '.krsrsrk.',
-    '..kkkkk..',
-    '....k....',
-    '...knk...',
-    '...knk...',
-    '....k....',
-  ];
-  const SHUTTLE_DOWN = [
-    '.kkkkk.',
-    'klllllk',
-    'klllllk',
-    '.kklkk.',
-    '..kck..',
-    '..kck..',
-    '...k...',
-  ];
-  const SHUTTLE_UP = SHUTTLE_DOWN.slice().reverse();
+  /* ------------------------------------------------------------------ atlas RG-B1 */
+  const ATLAS = root.SPRITE_ATLAS;
+  // Sprites en l'air : l'ancre « pieds » n'a pas de sens, on centre horizontalement.
+  const CENTER_ANCHOR = { jump: true, smash_hit: true };
+  const SHUTTLE_ANGLES = 16;
 
-  function rotate90(rows) { // sens horaire
-    const h = rows.length, w = rows[0].length;
-    const out = [];
-    for (let x = 0; x < w; x++) { let s = ''; for (let y = h - 1; y >= 0; y--) s += rows[y][x]; out.push(s); }
-    return out;
+  function hslOf(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b), l = (max + min) / 2;
+    if (max === min) return [0, 0, l];
+    const d = max - min, sat = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    let h;
+    if (max === r) h = (g - b) / d + (g < b ? 6 : 0); else if (max === g) h = (b - r) / d + 2; else h = (r - g) / d + 4;
+    return [h / 6, sat, l];
   }
-  const RACKET_RIGHT = rotate90(RACKET_UP);
-  const RACKET_DOWN = rotate90(RACKET_RIGHT);
-  const RACKET_LEFT = rotate90(RACKET_DOWN);
+  function rgbOf(h, sat, l) {
+    if (sat === 0) { const v = Math.round(l * 255); return [v, v, v]; }
+    const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat, p = 2 * l - q;
+    const f = (t) => { t = (t + 1) % 1; if (t < 1 / 6) return p + (q - p) * 6 * t; if (t < 1 / 2) return q; if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6; return p; };
+    return [Math.round(f(h + 1 / 3) * 255), Math.round(f(h) * 255), Math.round(f(h - 1 / 3) * 255)];
+  }
 
   function hexMul(hex, k) {
     const n = parseInt(hex.slice(1), 16);
@@ -130,6 +58,14 @@
       this.w = 0; this.h = 0; this.dpr = 1; this.scale = 2;
       this.area = { top: 0, bottom: 0 };
       this.spriteCache = new Map();
+      this.tints = new Map();
+      this.shuttleFrames = null;
+      this.atlas = null;
+      if (ATLAS) {
+        const img = new Image();
+        img.onload = () => { this.atlas = img; this.buildShuttleFrames(); };
+        img.src = ATLAS.png;
+      }
       this.shakeX = 0; this.shakeY = 0;
       this.time = 0;
       this.fontReady = false;
@@ -143,7 +79,7 @@
       this.canvas.height = Math.round(h * this.dpr);
       this.canvas.style.width = w + 'px';
       this.canvas.style.height = h + 'px';
-      this.scale = h > w ? w / 160 : h / 160;
+      this.scale = h > w ? w / 192 : h / 192;
       this.bw = Math.round(w / this.scale); this.bh = Math.ceil(h / this.scale);
       this.buf.width = this.bw; this.buf.height = this.bh;
       this.area = { top: area.top / this.scale, bottom: area.bottom / this.scale };
@@ -160,12 +96,12 @@
       const maxW = portrait ? this.bw - 14 : this.bw * 0.5;          // en paysage, la croix et les boutons sont sur les côtés
       this.KX = maxW / 2 / COURT.halfWidthDoubles;                  // px par mètre en largeur (ligne de fond proche)
       this.SHRINK = 0.14;                                           // rétrécissement de la ligne de fond éloignée
-      const depthPx = areaH - 42;                                   // 20 px pour tribunes + tête du bot, 22 px pour le robot proche
+      const depthPx = areaH - 56;                                   // 24 px pour tribunes + tête du bot, 32 px pour le robot proche
       this.KZ = Math.min(depthPx / (2 * L + 2.6), this.KX * 0.6);   // px par mètre en profondeur
       this.KY = Math.max(6, Math.round(this.KZ * 1.2));             // px par mètre en hauteur
       this.cx = Math.floor(this.bw / 2);
       const courtPx = (2 * L + 2.6) * this.KZ;
-      this.baseY = Math.round(this.area.top + 20 + (areaH - 42 - courtPx) / 2 + courtPx); // y écran de z = -L-1.3
+      this.baseY = Math.round(this.area.top + 24 + (areaH - 56 - courtPx) / 2 + courtPx); // y écran de z = -L-1.3
     }
 
     project(x, y, z) {
@@ -177,29 +113,63 @@
     }
     px(x, y, z) { const p = this.project(x, y, z); return { x: Math.round(p.x), y: Math.round(p.y), s: p.s }; }
 
-    /* ---------------------------------------------------------------- sprites */
-    sprite(key, rows, palette, flip) {
-      const id = key + '|' + (flip ? 'f' : 'n') + '|' + Object.values(palette).join(',');
-      let c = this.spriteCache.get(id);
+    /* ---------------------------------------------------------------- atlas : teintes et volant */
+    /** Copie de l'atlas où les verts du châssis prennent la teinte demandée (le bot, ou un autre châssis). */
+    tinted(color) {
+      if (!color) return this.atlas;
+      let c = this.tints.get(color);
       if (c) return c;
-      const h = rows.length, w = rows[0].length;
-      c = document.createElement('canvas'); c.width = w; c.height = h;
+      c = document.createElement('canvas'); c.width = this.atlas.width; c.height = this.atlas.height;
       const ctx = c.getContext('2d');
-      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-        const ch = rows[y][x];
-        if (ch === '.') continue;
-        ctx.fillStyle = palette[ch] || '#ff00ff';
-        ctx.fillRect(flip ? w - 1 - x : x, y, 1, 1);
+      ctx.drawImage(this.atlas, 0, 0);
+      const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data;
+      const n = parseInt(color.slice(1), 16);
+      const [th, ts] = hslOf((n >> 16) & 255, (n >> 8) & 255, n & 255);
+      for (let i = 0; i < d.length; i += 4) {
+        if (d[i + 3] < 128) continue;
+        const [h, sat, l] = hslOf(d[i], d[i + 1], d[i + 2]);
+        if (sat < 0.1 || h < 0.18 || h > 0.5) continue;      // seuls les verts du châssis changent
+        const [r, g, b] = rgbOf(th, Math.min(1, Math.max(sat, ts * 0.55)), Math.min(0.8, l * 1.1));
+        d[i] = r; d[i + 1] = g; d[i + 2] = b;
       }
-      this.spriteCache.set(id, c);
+      ctx.putImageData(id, 0, 0);
+      this.tints.set(color, c);
       return c;
     }
 
-    robotPalette(r) {
-      const col = r.color || r.chassis.color;
-      const heat = r.heat / 100;
-      const hot = r.overheat > 0 ? '#f83030' : heat > 0.5 ? (heat > 0.8 ? '#f87030' : '#f8c040') : hexMul(col, 0.5);
-      return { k: PAL.outline, b: col, d: hexMul(col, 0.55), l: '#f4f4e8', g: '#a0a8bc', v: r.accent || '#f8f870', h: hot };
+    buildShuttleFrames() {
+      const f = ATLAS.frames.shuttle;
+      const base = document.createElement('canvas'); base.width = f.w; base.height = f.h;
+      const bctx = base.getContext('2d');
+      bctx.translate(f.w, 0); bctx.scale(-1, 1);            // le sprite pointe à gauche → base pointant à droite
+      bctx.drawImage(this.atlas, f.x, f.y, f.w, f.h, 0, 0, f.w, f.h);
+      const size = Math.ceil(Math.hypot(f.w, f.h)) + 2;
+      this.shuttleFrames = [];
+      for (let i = 0; i < SHUTTLE_ANGLES; i++) {
+        const c = document.createElement('canvas'); c.width = size; c.height = size;
+        const ctx = c.getContext('2d');
+        ctx.imageSmoothingEnabled = false;
+        ctx.translate(size / 2, size / 2); ctx.rotate(i / SHUTTLE_ANGLES * Math.PI * 2);
+        ctx.drawImage(base, -f.w / 2, -f.h / 2);
+        this.shuttleFrames.push(c);
+      }
+      this.shuttleSize = size;
+    }
+
+    /** Dessine un sprite de l'atlas, ancre (pieds) en (x, y). flip = miroir horizontal. */
+    drawSprite(name, x, y, flip, src) {
+      const f = ATLAS.frames[name];
+      if (!f || !this.atlas) return;
+      const b = this.bctx;
+      const ax = CENTER_ANCHOR[name] ? Math.round(f.w / 2) : f.ax;
+      const img = src || this.atlas;
+      if (flip) {
+        b.save(); b.translate(x, 0); b.scale(-1, 1);
+        b.drawImage(img, f.x, f.y, f.w, f.h, -(f.w - ax), y - f.ay, f.w, f.h);
+        b.restore();
+      } else {
+        b.drawImage(img, f.x, f.y, f.w, f.h, x - ax, y - f.ay, f.w, f.h);
+      }
     }
 
     /* ---------------------------------------------------------------- frame */
@@ -218,11 +188,11 @@
         if (game.assist && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing);
         this.drawShadow(s);
         this.drawSweet(game.player);
-        this.drawRobot(game.bot);
+        this.drawRobot(game.bot, game);
         if (s.z >= 0) { this.drawTrail(s); this.drawShuttle(s); }
         b.drawImage(this.netLayer, this.shakeX, this.shakeY);
         if (s.z < 0) { this.drawTrail(s); this.drawShuttle(s); }
-        this.drawRobot(game.player);
+        this.drawRobot(game.player, game);
         this.drawFx(game);
         this.drawMessage(game);
       } else {
@@ -334,61 +304,82 @@
     drawShuttle(s) {
       const b = this.bctx;
       const p = this.px(s.x, s.y, s.z);
-      const rows = s.vy < -0.5 ? SHUTTLE_DOWN : SHUTTLE_UP;
-      const img = this.sprite(s.vy < -0.5 ? 'shD' : 'shU', rows, { l: PAL.white, k: PAL.outline, c: '#e8c890' }, false);
-      b.drawImage(img, p.x - 3, p.y - 3);
+      if (!this.shuttleFrames) { b.fillStyle = PAL.white; b.fillRect(p.x - 2, p.y - 2, 5, 5); return; }
+      const sp = Math.hypot(s.vx, s.vy, s.vz);
+      let ang = Math.PI / 2;                                  // immobile : bouchon vers le bas
+      if (sp > 0.5) {
+        const q = this.project(s.x + s.vx / sp * 0.5, s.y + s.vy / sp * 0.5, s.z + s.vz / sp * 0.5);
+        const pp = this.project(s.x, s.y, s.z);
+        ang = Math.atan2(q.y - pp.y, q.x - pp.x);
+      }
+      const i = ((Math.round(ang / (Math.PI * 2) * SHUTTLE_ANGLES) % SHUTTLE_ANGLES) + SHUTTLE_ANGLES) % SHUTTLE_ANGLES;
+      const half = Math.floor(this.shuttleSize / 2);
+      b.drawImage(this.shuttleFrames[i], p.x - half, p.y - half);
     }
 
-    drawRobot(r) {
+    /** Choisit le sprite et son orientation selon l'état du robot. */
+    robotPose(r, game) {
+      const front = r.side > 0;                     // le bot nous fait face, le joueur est vu de dos
+      const swingU = r.swing > 0 ? 1 - r.swing / 0.3 : -1;
+      let name = null, flip = false;
+      const t = this.time;
+      if (game.state === 'point' && game.pointWinner) {
+        name = game.pointWinner === r ? 'win' : 'miss';
+        if (game.pointWinner === r && Math.floor(t * 4) % 2) name = 'idle';
+      } else if (game.state === 'end' && game.winner != null) {
+        name = (game.winner === 0) === !r.isAI ? 'win' : 'lose';
+      } else if (swingU >= 0) {
+        const sh = r.swingShot;
+        if (sh === 'smash') name = r.jumpT > 0 ? (swingU < 0.35 ? 'jump' : swingU < 0.75 ? 'smash_hit' : 'land') : (swingU < 0.6 ? 'smash_hit' : 'land');
+        else if (sh === 'serve') name = 'serve';
+        else if (sh === 'drop') name = swingU < 0.55 ? 'hit_low' : 'follow';
+        else if (sh === 'drive') name = swingU < 0.55 ? 'hit_mid' : 'follow';
+        else name = swingU < 0.55 ? 'hit_high' : 'follow';
+        flip = !front;                              // joueur : raquette côté droit
+      } else if (r.armed) {
+        const smash = r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A';
+        name = smash ? 'smash_prep' : 'prep';
+        flip = !front;
+      } else if (game.state === 'serve' && game.server === r) {
+        name = front ? 'idle' : 'back';
+      } else {
+        const sp = Math.hypot(r.vx, r.vz);
+        if (sp > 0.5) {
+          const lateral = Math.abs(r.vx) > 0.3 * Math.abs(r.vz);
+          const fast = sp > 5.2;
+          const ph = Math.floor(r.walk * 3) % 2;
+          if (lateral || front) { name = (fast ? 'run' : 'walk') + (ph ? '1' : '2'); flip = r.vx < 0; if (!lateral && front) flip = r.vz > 0; }
+          else name = 'back';
+        } else name = front ? 'idle' : 'back';
+      }
+      return { name, flip };
+    }
+
+    drawRobot(r, game) {
       const b = this.bctx;
       const p = this.px(r.x, 0, r.z);
-      const front = r.side > 0;
-      const pal = this.robotPalette(r);
-      // ombre
+      // ombre au sol
       b.fillStyle = PAL.shadow;
-      b.fillRect(p.x - 6, p.y - 1, 13, 1); b.fillRect(p.x - 7, p.y, 15, 1); b.fillRect(p.x - 6, p.y + 1, 13, 1);
+      b.fillRect(p.x - 6, p.y - 1, 13, 1); b.fillRect(p.x - 8, p.y, 17, 1); b.fillRect(p.x - 6, p.y + 1, 13, 1);
+      if (!this.atlas) return;
 
-      const moving = Math.hypot(r.vx, r.vz) > 0.5;
-      const frame = moving ? (Math.floor(r.walk * 3) % 2 ? LEGS_RUN_A : LEGS_RUN_B) : LEGS_IDLE;
-      const rows = (front ? HEAD_FRONT : HEAD_BACK).concat(front ? TORSO_FRONT : TORSO_BACK, frame);
-      const key = (front ? 'F' : 'B') + (moving ? (frame === LEGS_RUN_A ? 'a' : 'b') : 'i');
-      const img = this.sprite(key, rows, pal, false);
-      const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 12) : 0;
-      const ox = p.x - 8, oy = p.y - 24 - jump;
+      const jump = r.jumpT > 0 ? Math.round(Math.sin(Math.PI * (1 - r.jumpT / RS.JUMP_TIME)) * 14) : 0;
+      const bob = (!r.armed && r.swing <= 0 && Math.hypot(r.vx, r.vz) > 0.5 && r.side < 0) ? (Math.floor(r.walk * 3) % 2) : 0;
+      const { name, flip } = this.robotPose(r, game);
+      const tint = (r.isAI || r.chassis.key !== 'balanced') ? r.color : null;
+      const src = tint ? this.tinted(tint) : this.atlas;
       if (r.overheat > 0 && Math.floor(this.time * 10) % 2) b.globalAlpha = 0.6;
-      b.drawImage(img, ox, oy);
+      this.drawSprite(name, p.x, p.y - jump - bob, flip, src);
       b.globalAlpha = 1;
 
-      // raquette : main droite = à droite du sprite pour le joueur (vu de dos), à gauche pour le bot (de face)
-      const dir = front ? -1 : 1;
-      const handX = p.x + dir * 7, handY = oy + 12;
-      const armedSmash = r.armed && (r.isAI ? r.armed.shot === 'smash' : r.armed.btn === 'A');
-      let rk, rx, ry;
-      const rpal = { k: PAL.outline, r: '#f0f0e8', s: '#8890a8', n: '#6a4a30' };
-      if (r.swing > 0) {
-        const u = 1 - r.swing / 0.3;
-        const low = r.swingShot === 'drop' || r.swingShot === 'serve';
-        if (low) { rk = u < 0.5 ? RACKET_DOWN : (dir > 0 ? RACKET_RIGHT : RACKET_LEFT); rx = handX + dir * (u < 0.5 ? 0 : 3) - 4; ry = u < 0.5 ? handY + 3 : handY - 2; }
-        else if (u < 0.3) { rk = RACKET_UP; rx = handX - 4; ry = oy - 10; }
-        else if (u < 0.65) { rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = oy - 1; }
-        else { rk = RACKET_DOWN; rx = handX + dir * 2 - 4; ry = handY + 2; }
-      } else if (r.armed && armedSmash) {
-        rk = RACKET_UP; rx = handX + dir * 2 - 4; ry = oy - 9 + (Math.floor(this.time * 8) % 2);
-      } else if (r.armed) {
-        rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 4 - 4; ry = handY - 1;
-      } else {
-        rk = dir > 0 ? RACKET_RIGHT : RACKET_LEFT; rx = handX + dir * 3 - 4; ry = handY + 4;
-      }
-      const rkey = rk === RACKET_UP ? 'rU' : rk === RACKET_DOWN ? 'rD' : rk === RACKET_RIGHT ? 'rR' : 'rL';
-      b.drawImage(this.sprite(rkey, rk, rpal, false), Math.round(rx), Math.round(ry));
-
-      // barre de charge pendant l'armement
-      if (r.armed && !r.isAI && armedSmash) {
+      // barre de préparation du smash (joueur)
+      const armedSmash = r.armed && !r.isAI && r.armed.btn === 'A';
+      if (armedSmash) {
         const k = clamp((this.gameTime - r.armed.t0) / RS.CHARGE_TIME, 0, 1);
         b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
         b.fillStyle = k >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * k), 2);
       }
-      if (r.overheat > 0) this.text('HOT!', p.x, oy - 12, '#f83030', 8, true);
+      if (r.overheat > 0) this.text('HOT!', p.x, p.y - 44, '#f83030', 8, true);
     }
 
     text(str, x, y, color, size, center, outline) {

@@ -39,7 +39,8 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 
 - `src/physics.js` — intégrateur du volant + solveur de trajectoire (`planShot` : « atterrir là, avec cet angle ou cette vitesse, en passant le filet »).
 - `src/game.js` — robots, contact/qualité, spécification des frappes, IA, score, Heat.
-- `src/render.js` — pixel art façon Game Boy : tampon 160 px de large, fausse perspective, sprites, police pixel.
+- `src/render.js` — pixel art façon Game Boy : tampon 192 px de large, fausse perspective, sprites de l'atlas, police pixel.
+- `src/sprites.js` — atlas RG-B1 embarqué (généré par `tools/extract_sprites.py` depuis `assets/rg-b1-sheet.png`).
 - `src/input.js` — croix directionnelle fixe 8 directions, boutons A/B (Pointer Events), clavier.
 - `src/audio.js` — sons synthétiques WebAudio.
 - `src/main.js` — menus, HUD, boucle.
@@ -48,6 +49,7 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 node tests/physics.test.mjs   # le solveur atterrit où on lui demande
 node tests/match.test.mjs     # 9 matchs complets simulés (3 difficultés × 3 châssis)
 node build.mjs                # dist/index.html mono-fichier (CSS + JS inclus)
+python3 tools/extract_sprites.py   # régénère l'atlas de sprites (Pillow + numpy)
 ```
 
 ## Suite prévue (hors prototype)
