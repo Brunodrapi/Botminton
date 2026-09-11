@@ -973,8 +973,11 @@
       if (!a || a.length < 23) return;
       const f = flip ? -1 : 1;
       const st = STATES[a[1]];
-      if (st) this.state = st;
-      this.score = [a[3], a[4]];
+      // En duel, l'invité joue en bas de SON écran : son camp est celui d'en face chez l'hôte. Tout
+      // ce qui se compte par camp doit donc être retourné avec le terrain — sans quoi il lisait le
+      // score de l'hôte comme le sien, et s'entendait félicité pour les points qu'il encaissait.
+      if (st) { if (st === 'rally' && this.state !== 'rally') this.message = null; this.state = st; }
+      this.score = flip ? [a[4], a[3]] : [a[3], a[4]];
       const n = a[5] | 0;
       const srvCanon = a[2];
       const s = this.shuttle;
@@ -987,9 +990,10 @@
       if (this.run && this.run.handicap !== hc) this.run.handicap = hc;
       // La phase dit à l'invité s'il doit montrer un choix de carte ou l'écran de fin : sans elle,
       // il afficherait la fin d'une run que l'hôte, lui, veut simplement continuer.
-      this.phase = PHASES[a[12]] || null;
+      const ph = PHASES[a[12]] || null;
+      this.phase = flip ? (ph === 'won' ? 'lost' : ph === 'lost' ? 'won' : ph) : ph;
       this.pendingRacket = !!a[13];
-      this.winner = a[14] < 0 ? null : a[14];
+      this.winner = a[14] < 0 ? null : (flip ? 1 - a[14] : a[14]);
       this.run.stage = a[15]; this.run.level = a[16];
       s.px = s.x; s.py = s.y; s.pz = s.z;
       const ovx = s.vx, ovy = s.vy, ovz = s.vz;
@@ -1058,7 +1062,7 @@
     updateRemote(dt, input, gdt) {
       this.time += dt;
       this.matchTime += dt;
-      if (this.message) this.message.t += dt;
+      if (this.message) { this.message.t += dt; if (this.message.t > 4) this.message = null; }
       if (this.state === 'serve' || this.state === 'rally') this.driveHuman(this.player, input, true);
       for (const r of this.robots) {
         if (r.dive) { r.dive.t += dt; if (r.dive.t >= DIVE_TOTAL) r.dive = null; }

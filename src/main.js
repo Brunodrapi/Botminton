@@ -445,7 +445,8 @@
   /* ---------------------------------------------------------------- HUD */
   let endShown = false;
   let lastServing = null;
-  let netLabels = null;
+  /** N'écrit dans le DOM que si le texte change : appelable à chaque image sans rien coûter. */
+  const setText = (id, v) => { const el = $(id); if (el.textContent !== v) el.textContent = v; };
   const heatPct = $('heatPct');
   const heatBars = { you: $('heatBar'), bot: $('heatBarBot') };
   for (const k in heatBars) { heatBars[k].innerHTML = ''; for (let i = 0; i < 10; i++) { const d = document.createElement('i'); heatBars[k].appendChild(d); } }
@@ -466,15 +467,15 @@
       : `NIVEAU ${game.run.level + 1} · PALIER ${RS.fmtScore(game.nextStep())}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
-    if (netLabels !== net.state + net.mode) {
-      netLabels = net.state + net.mode;
-      const mate = game.partner(p);
-      $('chassisName').textContent = mate && !mate.isAI ? `+${mate.name || 'ALLIÉ'}` : RS.CHASSIS[settings.chassis].name;
-      const foe = game.robots.find((r) => r.side > 0 && !r.isAI);
-      // En face d'un humain, ce n'est plus un bot : le dire évite de chercher qui est qui.
-      $('foeKind').textContent = foe ? 'FACE' : 'BOT';
-      $('diffName').textContent = foe ? (foe.name || 'PILOTE') : game.diff.name;
-    }
+    // Les étiquettes se comparent à ce qui est affiché plutôt que de se fier à un état résumé :
+    // deux matchs de suite dans la même formule donnaient le même résumé, donc plus rien ne se
+    // remettait à jour et l'adversaire humain restait annoncé « BOT ».
+    const mate = game.partner(p);
+    const foe = game.robots.find((r) => r.side > 0 && !r.isAI);
+    // En face d'un humain, ce n'est plus un bot : le dire évite de chercher qui est qui.
+    setText('chassisName', mate && !mate.isAI ? `+${mate.name || 'ALLIÉ'}` : RS.CHASSIS[settings.chassis].name);
+    setText('foeKind', foe ? 'FACE' : 'BOT');
+    setText('diffName', foe ? (foe.name || 'PILOTE') : game.diff.name);
     // L'état de la liaison, en toutes lettres : sans lui une partie en ligne muette ressemble
     // à une partie normale où l'on bouge sans que rien n'arrive jamais.
     const tag = net.status();
@@ -575,9 +576,12 @@
       const level = ev.c % 10, sup = ev.c >= 10;
       sfx.handle({ type: 'hit', shot, level, robot: r || game.player, sup });
     } else if (ev.k === 2) {
-      const mine = ev.a === 0;
+      // Le camp qui marque est annoncé dans le repère de l'hôte : en duel il faut le retourner,
+      // sinon l'invité s'entend dire « point pour toi » quand il vient d'en encaisser un.
+      const t = net.flip ? 1 - ev.a : ev.a;
+      const mine = t === 0;
       game.message = { text: RS.REASONS[ev.b] || 'POINT', sub: mine ? 'Point pour toi' : 'Point pour eux', t: 0, good: mine };
-      sfx.handle({ type: 'point', winner: ev.a, reason: RS.REASONS[ev.b] });
+      sfx.handle({ type: 'point', winner: t, reason: RS.REASONS[ev.b] });
     }
   }
 

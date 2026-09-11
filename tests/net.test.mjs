@@ -204,6 +204,38 @@ const idle = () => ({ stick: { x: 0, y: 0 }, held: {}, just: [] });
     Math.hypot(guest.shuttle.x - host.shuttle.x, guest.shuttle.z - host.shuttle.z) < 1.2);
 }
 
+// -------------------------------------------------- duel : tout ce qui se compte par camp se retourne
+// L'invité joue en bas de son écran, donc son camp est celui d'en face chez l'hôte. Il lisait le
+// score de l'hôte comme le sien, s'entendait annoncer « point pour toi » sur les points encaissés,
+// et l'annonce restait affichée jusqu'à la fin puisque c'est le service qui l'efface, chez l'hôte.
+{
+  const host = new RS.Game();
+  host.startExhibition({ chassis: 'balanced', difficulty: 'rookie', humans: HUMANS });
+  const guest = new RS.Game();
+  guest.startExhibition({ chassis: 'light', difficulty: 'rookie', humans: { 0: { chassis: 'light' }, 1: { chassis: 'balanced' } } });
+
+  host.score = [4, 1];
+  guest.applySnapshot(host.snapshot(1), [1, 0], true, true, 0);
+  check('le score se lit dans le camp de l’invité',
+    guest.score[0] === 1 && guest.score[1] === 4, `${guest.score.join('-')} chez l’invité pour ${host.score.join('-')} chez l’hôte`);
+
+  // Fin de match : ce que l'hôte perd, l'invité le gagne.
+  host.score = [15, 3]; host.phase = 'won'; host.winner = 0; host.state = 'end';
+  guest.applySnapshot(host.snapshot(2), [1, 0], true, true, 0);
+  check('la victoire de l’hôte est la défaite de l’invité', guest.phase === 'lost' && guest.winner === 1, `${guest.phase}/${guest.winner}`);
+
+  // L'annonce du point s'efface quand l'échange reprend, comme le ferait le service chez l'hôte.
+  guest.message = { text: 'DEHORS', sub: 'Point pour eux', t: 0, good: false };
+  host.state = 'rally';
+  guest.applySnapshot(host.snapshot(3), [1, 0], true, true, 0);
+  check('l’annonce du point s’efface à la reprise de l’échange', guest.message === null);
+
+  // Et si l'instantané venait à manquer, elle s'efface d'elle-même plutôt que de rester à l'écran.
+  guest.message = { text: 'DEHORS', sub: 'Point pour eux', t: 0, good: false };
+  for (let i = 0; i < 300; i++) guest.updateRemote(1 / 60, idle(), 1 / 60);
+  check('et de toute façon au bout de quelques secondes', guest.message === null);
+}
+
 // -------------------------------------------------- places et hôte : un seul arbitre, deux places
 // Ce que le joueur a vu casser : les deux écrans se croyaient le même joueur et personne n'arbitrait,
 // si bien qu'on pouvait courir mais qu'aucune frappe ne partait. La place ne doit donc jamais être

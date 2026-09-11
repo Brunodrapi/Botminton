@@ -20,7 +20,7 @@ const out = process.argv[2] || '/tmp/shots';
 mkdirSync(out, { recursive: true });
 
 const browser = await chromium.launch();
-const page = await browser.newPage({ ...devices['iPhone 13'], hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+const page = await browser.newPage({ ...devices[process.env.DEV || 'iPhone 13'], hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
