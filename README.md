@@ -43,10 +43,28 @@ Le joueur ne choisit pas un type de coup : il choisit un point de chute, et la t
 | Entre les deux, volant sous 1,85 m | **Drive** |
 | Entre les deux, volant au-dessus de 1,85 m | **Smash** (au-dessus de 2,5 m, le robot saute) |
 
-## Deux modes
+## Trois modes
 
 - **Rogue lite** : choix du châssis, puis les 4 adversaires à la suite, avec les cartes et le protocole du boss.
 - **Exhibition** : choix du châssis, puis de l'adversaire, pour un match libre en 15 points sans carte ni protocole.
+- **En ligne** : duel 1v1 ou coop 2v2, en exhibition comme en rogue lite.
+
+### En ligne
+
+| Formule | Terrain | Qui joue |
+| --- | --- | --- |
+| **Duel 1v1** | Simple | Deux humains, un par camp |
+| **Coop 2v2** | Double | Deux humains d'un côté, deux machines de l'autre |
+
+On crée une table ou on en rejoint une dans la liste ; chacun choisit son châssis, se déclare prêt, et
+le match part quand les deux le sont. **Chaque joueur a son propre deck** : à chaque palier vous
+choisissez chacun votre carte et la manche repart une fois que les deux ont choisi. En duel rogue
+lite, le niveau se gagne à 15 points et la run revient à qui en remporte le plus.
+
+Le jeu en ligne passe par la capacité `room` des Artifacts claude.ai : il réunit les personnes de la
+même organisation qui ont **la page ouverte au même moment**, et rien n'est conservé — fermer la page
+ferme la table. Ailleurs (GitHub Pages, fichier local), le bouton reste visible mais annonce que le
+mode n'est pas disponible, et les modes solo fonctionnent normalement.
 
 L'aide « zone d'arrivée du volant » du menu équivaut au premier niveau de la carte Optique prédictive.
 
@@ -115,11 +133,16 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 - `src/sprites.js` — atlas embarqués : RG-B1 (héros), BW-01 (Rookie), RG-02 (Pro), RG-03 (Elite), ZG-04 (Boss), générés par `tools/extract_sprites.py` depuis `assets/*-sheet.png`.
 - `src/input.js` — croix directionnelle fixe 8 directions, boutons A/B (Pointer Events), clavier.
 - `src/audio.js` — sons synthétiques WebAudio.
+- `src/net.js` — jeu en ligne : salon, élection de l'hôte, instantanés et entrées, le tout sur la présence de la capacité `room`.
 - `src/main.js` — menus, HUD, boucle.
 
 ```bash
 node tests/physics.test.mjs   # le solveur atterrit où on lui demande
-node tests/match.test.mjs     # 9 matchs complets simulés (3 difficultés × 3 châssis)
+node tests/match.test.mjs     # matchs complets simulés, simple et double, cartes et paliers
+node tests/net.test.mjs       # un hôte et un invité, latence simulée : l'invité doit rester collé
+NETDEBUG=1 NETLAG=9 node tests/net.test.mjs   # détaille les points et durcit la latence
+node tools/online.mjs /tmp/shots              # deux navigateurs jouent l'un contre l'autre
+MODE=coop GAMEMODE=run node tools/online.mjs  # …en coop 2v2 et en rogue lite
 node build.mjs                # dist/index.html mono-fichier (CSS + JS inclus)
 python3 tools/extract_sprites.py   # régénère l'atlas de sprites (Pillow + numpy)
 ```

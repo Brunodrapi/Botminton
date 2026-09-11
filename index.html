@@ -66,6 +66,8 @@
       <p class="tag run-note">4 niveaux de 15 points · une carte tous les 5 points · protocole imposé chez le boss</p>
       <button id="exhibBtn" class="ghost">EXHIBITION</button>
       <p class="tag run-note">Un match libre en 15 points contre l'adversaire de ton choix</p>
+      <button id="onlineBtn" class="ghost">EN LIGNE</button>
+      <p class="tag run-note" id="onlineNote">Duel 1v1 ou coop 2v2, avec les gens qui ont cette page ouverte</p>
       <button id="helpBtn" class="ghost">Comment jouer ?</button>
     </div>
   </div>
@@ -85,9 +87,43 @@
         <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés, les smashs et les sauvetages. Pleine, ton robot s'auréole et son prochain smash devient un <b>SUPER SMASH</b> qui vide la jauge.</li>
         <li><b>Run</b> : 4 niveaux de <b>15 points</b>. Dès que l'un des deux atteint 5 puis 10, tu choisis entre <b>3 cartes</b>, cumulables 3 fois. À 15, le bot devant arrête la run ; toi devant, une carte de plus, un <b>modificateur de raquette</b>, et l'adversaire suivant.</li>
         <li>Le <b>boss</b> impose un protocole tiré au sort : volant survolté, servos bridés, image monochrome ou sépia, terrain à l'envers, panne de lumière ou lignes effacées.</li>
+        <li><b>EN LIGNE</b> : crée une table ou rejoins-en une, en <b>duel 1v1</b> (chacun son camp) ou en <b>coop 2v2</b> (à deux contre deux machines), en exhibition comme en rogue lite. Tu joues avec les gens qui ont cette page ouverte en même temps que toi.</li>
+        <li>En ligne, <b>chacun a ses propres cartes</b> : à chaque palier, vous choisissez chacun la vôtre et la manche repart quand les deux ont choisi. En duel rogue lite, le niveau se gagne à 15 et c'est celui qui en remporte le plus qui gagne la run.</li>
         <li>Clavier : flèches / ZQSD pour bouger, <b>A</b> (ou X, espace) et <b>B</b> (ou C).</li>
       </ul>
       <button id="helpBack" class="primary">OK</button>
+    </div>
+  </div>
+
+  <!-- ------------------------------------------------------------ en ligne -->
+  <div id="online" class="panel hidden">
+    <div class="panel-inner">
+      <h1>EN LIGNE</h1>
+      <p class="tag" id="onlineState">Connexion…</p>
+
+      <h2>Formule</h2>
+      <div class="cards" id="netMode"></div>
+      <h2>Épreuve</h2>
+      <div class="cards" id="netGame"></div>
+      <h2>Ton nom</h2>
+      <input id="netName" class="field" maxlength="10" placeholder="PILOTE" autocomplete="off" spellcheck="false">
+
+      <h2>Tables ouvertes</h2>
+      <div class="choices" id="netTables"></div>
+      <button id="netCreate" class="primary">CRÉER UNE TABLE</button>
+      <button id="netBack" class="ghost">Retour</button>
+    </div>
+  </div>
+
+  <div id="lobby" class="panel hidden">
+    <div class="panel-inner">
+      <h1>TABLE <span id="lobbyCode"></span></h1>
+      <p class="tag" id="lobbySub"></p>
+      <div class="seats" id="lobbySeats"></div>
+      <h2>Ton châssis</h2>
+      <div class="cards" id="lobbyChassis"></div>
+      <button id="lobbyReady" class="primary">JE SUIS PRÊT</button>
+      <button id="lobbyLeave" class="ghost">Quitter la table</button>
     </div>
   </div>
 
@@ -96,6 +132,7 @@
       <h1 id="choiceTitle">MANCHE GAGNÉE</h1>
       <p class="tag" id="choiceSub">Choisis une pièce</p>
       <div class="choices" id="choiceList"></div>
+      <p class="tag" id="choiceWait"></p>
     </div>
   </div>
 
@@ -154,6 +191,7 @@
 <script src="src/render.js"></script>
 <script src="src/input.js"></script>
 <script src="src/audio.js"></script>
+<script src="src/net.js"></script>
 <script src="src/main.js"></script>
 </body>
 </html>

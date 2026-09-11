@@ -14,7 +14,8 @@
     onAny: () => sfx.unlock(),
   });
 
-  const settings = { chassis: 'balanced', difficulty: 'rookie', assist: false };
+  const settings = { chassis: 'balanced', difficulty: 'rookie', assist: false, name: '' };
+  const net = new window.RogueNet();
   try {
     const saved = JSON.parse(localStorage.getItem('rogue-shuttle-settings') || 'null');
     if (saved) Object.assign(settings, saved);
@@ -42,8 +43,8 @@
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
   $('assistToggle').checked = !!settings.assist;
   $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
-  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis'];
-  const LOBBY = ['menu', 'help', 'chassis', 'opponents'];
+  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis', 'online', 'lobby'];
+  const LOBBY = ['menu', 'help', 'chassis', 'opponents', 'online', 'lobby'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -91,6 +92,121 @@
     }
     showPanel('opponents');
   }
+
+  /* ---------------------------------------------------------------- en ligne */
+  const MODE_DESC = {
+    duel: { name: 'DUEL 1v1', desc: ['Deux robots', 'chacun son camp'] },
+    coop: { name: 'COOP 2v2', desc: ['À deux contre', 'deux machines'] },
+  };
+  const GAME_DESC = {
+    exhib: { name: 'EXHIBITION', desc: ['Un match', 'en 15 points'] },
+    run: { name: 'ROGUE LITE', desc: ['4 niveaux', 'avec les cartes'] },
+  };
+  const netSettings = { mode: 'duel', game: 'exhib' };
+
+  function pickRow(el, defs, current, onPick) {
+    el.innerHTML = '';
+    for (const k of Object.keys(defs)) {
+      const d = defs[k];
+      const b = document.createElement('button');
+      b.className = 'card' + (current === k ? ' selected' : '');
+      b.innerHTML = `<div class="title">${d.name}</div><div class="desc">${d.desc.join('<br>')}</div>`;
+      b.addEventListener('click', () => { sfx.unlock(); onPick(k); });
+      el.appendChild(b);
+    }
+  }
+
+  function renderOnline() {
+    if ($('online').classList.contains('hidden')) return;
+    const st = $('onlineState');
+    const off = !net.room;
+    if (off) st.textContent = net.error
+      ? 'Indisponible ici — il faut ouvrir la page sur claude.ai, et être plusieurs à l\u2019avoir ouverte'
+      : 'Connexion…';
+    else if (!net.connected()) st.textContent = 'Reconnexion…';
+    else st.textContent = `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`;
+    $('netCreate').disabled = off;
+    $('netCreate').style.opacity = off ? 0.45 : 1;
+    pickRow($('netMode'), MODE_DESC, netSettings.mode, (k) => { netSettings.mode = k; renderOnline(); });
+    pickRow($('netGame'), GAME_DESC, netSettings.game, (k) => { netSettings.game = k; renderOnline(); });
+    const tables = net.room ? net.tables().filter((t) => !t.players.some((p) => p.me)) : [];
+    $('netTables').innerHTML = tables.length ? tables.map((t) => {
+      const full = t.players.length >= 2 || t.playing;
+      return `<button class="choice" data-code="${t.code}" ${full ? 'disabled style="opacity:.5"' : ''}>
+        <span class="ico">${t.mode === 'coop' ? '🤝' : '⚔️'}</span>
+        <span class="txt"><span class="nm">${t.code} · ${MODE_DESC[t.mode] ? MODE_DESC[t.mode].name : t.mode}</span>
+        <span class="ds">${GAME_DESC[t.game] ? GAME_DESC[t.game].name : t.game} · ${t.players.map((p) => p.name || 'PILOTE').join(', ')}${full ? ' · complet' : ''}</span></span>
+      </button>`;
+    }).join('') : '<p class="tag">Aucune table pour l\u2019instant — crée la tienne.</p>';
+    for (const b of $('netTables').querySelectorAll('.choice[data-code]')) {
+      b.addEventListener('click', () => {
+        if (b.hasAttribute('disabled')) return;
+        sfx.unlock();
+        settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
+        net.join(b.dataset.code, settings.chassis, settings.name);
+        showLobby();
+      });
+    }
+  }
+
+  async function showOnline() {
+    showPanel('online');
+    $('netName').value = settings.name || '';
+    renderOnline();
+    const ok = await net.connect();
+    if (!ok) net.error = net.error || 'not_granted';
+    renderOnline();
+  }
+
+  function showLobby() {
+    showPanel('lobby');
+    renderLobby();
+  }
+
+  function renderLobby() {
+    if ($('lobby').classList.contains('hidden') || !net.table) return;
+    const members = net.members(net.table);
+    const seats = net.seats();
+    $('lobbyCode').textContent = net.table;
+    $('lobbySub').textContent = `${MODE_DESC[net.mode].name} · ${GAME_DESC[net.game].name}`
+      + (net.isHost() ? ' · tu héberges' : '');
+    const rows = [];
+    for (let i = 0; i < seats; i++) {
+      const m = members[i];
+      if (!m) { rows.push('<div class="seat empty"><span class="dot"></span><span class="who">En attente d\u2019un joueur…</span></div>'); continue; }
+      const q = m.presence || {};
+      const mine = m.peer === net.myPeer;
+      const camp = net.mode === 'coop' ? 'même camp' : (i === 0 ? 'camp du bas' : 'camp du haut');
+      rows.push(`<div class="seat ${q.rd ? 'ok' : ''}"><span class="dot"></span>
+        <span class="who">${(q.nm || 'PILOTE')}${mine ? ' (toi)' : ''}
+        <span class="tagline">${RS.CHASSIS[q.ch] ? RS.CHASSIS[q.ch].name : '?'} · ${camp} · ${q.rd ? 'prêt' : 'choisit…'}</span></span></div>`);
+    }
+    $('lobbySeats').innerHTML = rows.join('');
+    pickRow($('lobbyChassis'), RS.CHASSIS, settings.chassis, (k) => {
+      settings.chassis = k; saveSettings(); net.setChassis(k); renderLobby();
+    });
+    $('lobbyReady').textContent = net.ready ? 'ANNULER' : 'JE SUIS PRÊT';
+    if (net.canStart() && net.state !== 'playing') startNetMatch();
+  }
+
+  /** Les deux côtés composent la même partie : chacun se met en place 0, chez lui. */
+  function startNetMatch() {
+    const seat = net.seating();
+    net.begin();
+    handicapShown = null;
+    const opts = { chassis: settings.chassis, assist: settings.assist, doubles: seat.doubles, humans: seat.humans };
+    if (net.game === 'run') { game.startRun(opts); game.run.versus = net.mode === 'duel'; }
+    else { opts.difficulty = net.mode === 'duel' ? 'rookie' : settings.difficulty; game.startExhibition(opts); }
+    beginRound();
+  }
+
+  function quitNet() {
+    net.leave();
+    game.state = 'menu';
+    showPanel('menu');
+  }
+
+  net.onChange = () => { renderOnline(); renderLobby(); };
 
   /** Reprend la partie après le menu ou après un choix de carte. */
   let handicapShown = null;
@@ -153,6 +269,7 @@
       ? `${ahead ? 'Tu mènes' : 'Le bot mène'} ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])} · choisis une pièce`
       : 'Choisis un modificateur de raquette';
     const owned = isCard ? game.deck(0).cards : game.deck(0).racket;
+    $('choiceWait').textContent = '';
     $('choiceList').innerHTML = list.map((u) => {
       const n = (owned[u.key] || 0) + 1;
       const pips = Array.from({ length: RS.UP_MAX }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');
@@ -174,10 +291,49 @@
 
   function afterChoice(kind) {
     if (kind === 'cards' && game.pendingRacket) { showChoice('racket'); return; }
+    if (net.state === 'playing') {
+      // En ligne, on attend que tout le monde ait choisi : c'est l'hôte qui lance la manche suivante.
+      net.setPhase('ready');
+      $('choiceList').innerHTML = '';
+      $('choiceWait').textContent = 'En attente de l\u2019autre joueur…';
+      return;
+    }
     game.advance();
     beginRound();
   }
 
+  /** Appelée à chaque image pendant une partie en ligne : synchronise les écrans de carte. */
+  function netRoundSync() {
+    if (net.state !== 'playing') return;
+    if (net.isHost()) {
+      if (game.state === 'end' && net.phase === 'ready' && net.allChosen()) {
+        net.setPhase(null);
+        game.advance();
+        beginRound();
+      }
+    } else if (game.hostRound != null && game.hostRound !== (game.roundSeq || 0)) {
+      // L'hôte a lancé la manche suivante : on avance d'autant chez soi.
+      net.setPhase(null);
+      while ((game.roundSeq || 0) < game.hostRound) game.advance();
+      beginRound();
+    }
+  }
+
+  $('onlineBtn').addEventListener('click', () => { sfx.unlock(); showOnline(); });
+  $('netBack').addEventListener('click', () => showPanel('menu'));
+  $('netCreate').addEventListener('click', () => {
+    if (!net.room) return;
+    sfx.unlock();
+    settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
+    net.create(netSettings.mode, netSettings.game, settings.chassis, settings.name);
+    showLobby();
+  });
+  $('netName').addEventListener('change', () => {
+    settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
+    if (net.table) { net.name = settings.name; net.push(); }
+  });
+  $('lobbyReady').addEventListener('click', () => { sfx.unlock(); net.setReady(!net.ready); renderLobby(); });
+  $('lobbyLeave').addEventListener('click', () => { sfx.unlock(); quitNet(); });
   $('playBtn').addEventListener('click', () => showChassis('run'));
   $('chassisGo').addEventListener('click', () => { sfx.unlock(); if (pendingMode === 'run') startRun(); else showOpponents(); });
   $('chassisBack').addEventListener('click', () => showPanel('menu'));
@@ -186,19 +342,31 @@
   $('oppBack').addEventListener('click', () => showChassis('exhib'));
   $('helpBtn').addEventListener('click', () => showPanel('help'));
   $('helpBack').addEventListener('click', () => showPanel('menu'));
-  $('pauseBtn').addEventListener('click', () => { if (game.state !== 'paused') { game.pause(); deckBig($('pauseDeck')); showPanel('pause'); } });
+  $('pauseBtn').addEventListener('click', () => {
+    if (game.state === 'paused') return;
+    // En ligne, la partie ne s'arrête pas pour les autres : on le dit plutôt que de mentir.
+    const online = net.state === 'playing';
+    $('pause').querySelector('h1').textContent = online ? 'TA TABLE' : 'PAUSE';
+    $('resumeBtn').textContent = online ? 'Retour au jeu' : 'Reprendre';
+    $('quitBtn').textContent = online ? 'Quitter la table' : 'Abandonner la run';
+    if (!online) game.pause();
+    deckBig($('pauseDeck'));
+    showPanel('pause');
+  });
   $('resumeBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
-  $('quitBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
+  $('quitBtn').addEventListener('click', () => { if (net.table) quitNet(); else { game.state = 'menu'; showPanel('menu'); } });
   $('replayBtn').addEventListener('click', () => { if (game.run.solo) { game.startExhibition(settings); beginRound(); } else startRun(); });
-  $('menuBtn').addEventListener('click', () => { game.state = 'menu'; showPanel('menu'); });
+  $('menuBtn').addEventListener('click', () => { if (net.table) quitNet(); else { game.state = 'menu'; showPanel('menu'); } });
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' || e.key === 'p') {
       if (game.state === 'paused') { game.resume(); showPanel(null); }
-      else if (game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); }
+      else if (game.state !== 'menu' && game.state !== 'end') $('pauseBtn').click();
     }
     if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) showChassis('run');
   });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); } });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && net.state !== 'playing' && game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); }
+  });
 
   /* ---------------------------------------------------------------- layout */
   function layout() {
@@ -217,6 +385,7 @@
   /* ---------------------------------------------------------------- HUD */
   let endShown = false;
   let lastServing = null;
+  let netLabels = null;
   const heatPct = $('heatPct');
   const heatBars = { you: $('heatBar'), bot: $('heatBarBot') };
   for (const k in heatBars) { heatBars[k].innerHTML = ''; for (let i = 0; i < 10; i++) { const d = document.createElement('i'); heatBars[k].appendChild(d); } }
@@ -237,6 +406,13 @@
       : `NIVEAU ${game.run.level + 1} · PALIER ${RS.fmtScore(game.nextStep())}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
+    if (netLabels !== net.state + net.mode) {
+      netLabels = net.state + net.mode;
+      const mate = game.partner(p);
+      $('chassisName').textContent = mate && !mate.isAI ? `+${mate.name || 'ALLIÉ'}` : RS.CHASSIS[settings.chassis].name;
+      const foe = game.robots.find((r) => r.side > 0 && !r.isAI);
+      $('diffName').textContent = foe ? (foe.name || 'PILOTE') : game.diff.name;
+    }
     heatPct.textContent = p.energy.toFixed(0) + '%';
     heatBars.you.classList.toggle('full', p.energy >= RS.MAX_ENERGY);
     heatBars.bot.classList.toggle('full', b.energy >= RS.MAX_ENERGY);
@@ -255,7 +431,7 @@
   }
 
   function onRoundEnd() {
-    if (game.phase === 'cards') showChoice('cards');
+    if (game.phase === 'cards') { if (net.state === 'playing') net.setPhase('choose'); showChoice('cards'); }
     else showEnd();
   }
 
@@ -291,13 +467,54 @@
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
     const inp = input.consume();
-    game.update(dt, inp);
+    if (net.state === 'playing' && !net.isHost()) {
+      // Invité : on ne tranche rien, on prolonge la simulation et on rejoue ce que l'hôte annonce.
+      game.updateRemote(dt, inp, dt * (game.diff.tempo || 1));
+      const ev = net.guestTick(game);
+      if (ev) playRemoteEvent(ev);
+    } else {
+      game.update(dt, inp);
+      if (net.state === 'playing') net.hostTick(game);
+    }
     for (const e of game.events) sfx.handle(e);
     game.events.length = 0;
     renderer.draw(game, dt);
     updateHud();
+    netRoundSync();
+    // Le protocole du boss arrive par l'instantané : le filtre de l'invité doit suivre.
+    if (net.state === 'playing' && !net.isHost()) {
+      const k = game.run.handicap ? game.run.handicap.key : null;
+      if (k !== lastHandicap) { lastHandicap = k; applyHandicapFilter(); }
+    }
+    if (net.state === 'playing' && net.lostPeers()) { showDropped(); }
     if (game.state === 'end' && !endShown) { endShown = true; onRoundEnd(); }
     requestAnimationFrame(frame);
+  }
+
+  /** L'hôte annonce les frappes et les points : l'invité en rejoue le son et l'étiquette. */
+  function playRemoteEvent(ev) {
+    if (ev.k === 1) {
+      const r = game.robots[ev.a === undefined ? 0 : (net.map ? net.map.indexOf(ev.a) : ev.a)];
+      const shot = RS.SHOTS[ev.b] || 'drive';
+      const level = ev.c % 10, sup = ev.c >= 10;
+      sfx.handle({ type: 'hit', shot, level, robot: r || game.player, sup });
+    } else if (ev.k === 2) {
+      const mine = ev.a === 0;
+      game.message = { text: RS.REASONS[ev.b] || 'POINT', sub: mine ? 'Point pour toi' : 'Point pour eux', t: 0, good: mine };
+      sfx.handle({ type: 'point', winner: ev.a, reason: RS.REASONS[ev.b] });
+    }
+  }
+
+  let lastHandicap = null;
+  let droppedShown = false;
+  function showDropped() {
+    if (droppedShown) return;
+    droppedShown = true;
+    game.pause();
+    $('endTitle').textContent = 'JOUEUR PARTI';
+    $('endScore').textContent = 'La table s\u2019est vidée';
+    $('endStats').innerHTML = ''; $('endDeck').innerHTML = '';
+    showPanel('end');
   }
 
   showPanel('menu');
@@ -309,5 +526,5 @@
   document.addEventListener('gesturestart', (e) => e.preventDefault());
   document.addEventListener('dblclick', (e) => e.preventDefault());
 
-  window.__rogueShuttle = { game, renderer, input, settings, startRun, applyHandicapFilter };
+  window.__rogueShuttle = { game, renderer, input, settings, net, startRun, applyHandicapFilter };
 })();

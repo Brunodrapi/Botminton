@@ -24,6 +24,11 @@
   const SHOT_NAMES = { clear: 'DÉGAGÉ', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
   const MATE_COLORS = [null, '#f8d848', '#58e8f8', '#ff9ad8'];   // teintes des autres humains en ligne
+  const STATES = ['serve', 'rally', 'point', 'paused', 'end', 'menu'];
+  const REASONS = ['POINT !', 'POINT BOT', 'POINT ADVERSE', 'OUT', 'RATÉ', 'FILET', 'FAUTE DE SERVICE'];
+  const PHASES = ['cards', 'won', 'lost'];
+  const SHOTS = ['clear', 'drop', 'smash', 'drive', 'serve'];
+  const r2 = (v) => Math.round(v * 100) / 100;
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
   const STROKE_OFF = 0.28;     // le point idéal se décale du côté de la raquette (coup droit) ou de l'autre (revers)
@@ -38,6 +43,8 @@
   const SPREAD_BY_LEVEL = [1.15, 0.62, 0.3];   // dispersion en mètres selon la qualité du placement
   const SMASH_H = 1.85;        // au-dessus, un coup visé mi-court part en smash
   const SMASH_TOL = 0.8;       // au-delà de cet écart à la cible, la trajectoire n'est plus un smash
+  const NET_BACK = 0.12;       // recul maximal appliqué au geste d'un joueur distant (compensation de latence)
+  const NET_WIDEN = 0.05;      // élargissement maximal de sa fenêtre de contact, pour la gigue restante
   // Le coup part au relâchement du bouton : la raquette balaie et ne touche que dans sa fenêtre de contact.
   const SWING_TIME = 0.30;
   const SWING_HIT0 = 0.04;
@@ -125,6 +132,8 @@
       this.shake = 0;
       this.hitStop = 0;
       this.robots = [];
+      this.netOut = [];          // appuis et relâchements à transmettre à l'hôte
+      this.netEvent = null;
       this.doubles = false;
       this.seating = null;
       this.score = [0, 0];
@@ -163,6 +172,7 @@
 
     /** Après le choix des cartes : on reprend le même match, ou on passe à l'adversaire suivant. */
     advance() {
+      this.roundSeq = (this.roundSeq || 0) + 1;
       const r = this.run;
       if (r.stage >= CARD_STEPS.length - 1) { r.stage = 0; r.level++; r.levels++; this.startRound(); }
       else { r.stage++; this.winner = null; this.phase = null; this.setupServe(); }
@@ -241,7 +251,13 @@
       return { x: t.x, z: t.z, f: t.f, out, spread: this.spreadOf(p, 1, true), btn: h.btn };
     }
     jumpReach(r) { return JUMP_REACH + 0.25 * this.cardLv(r, 'thruster'); }
-    hitWindow(r) { const w = 0.03 * this.racketLv(r, 'window'); return [SWING_HIT0 - w * 0.5, SWING_HIT1 + w]; }
+    /** Fenêtre de contact. Un joueur distant la reçoit un peu plus large : sa frappe a voyagé,
+     *  et la gigue du réseau ne doit pas lui coûter des volants qu'il avait bien lus. */
+    hitWindow(r) {
+      const w = 0.03 * this.racketLv(r, 'window');
+      const j = r.netLag ? Math.min(NET_WIDEN, r.netLag * 0.5) : 0;
+      return [SWING_HIT0 - w * 0.5 - j, SWING_HIT1 + w + j];
+    }
 
     /** Trois cartes tirées au hasard parmi celles qui ne sont pas au maximum. */
     offer(list, owned) {
@@ -288,6 +304,8 @@
       this.events = [];
       this.matchTime = 0;
       this.winner = null;
+      this.netOut = [];
+      this.netEvent = null;
       this.setupServe();
     }
 
@@ -395,8 +413,12 @@
       this.shake = Math.max(0, this.shake - dt);
     }
 
-    updatePlayerInput(input) {
-      const p = this.player;
+    updatePlayerInput(input) { this.driveHuman(this.player, input); }
+
+    /** Applique une manette à un robot humain — le sien en local, ceux des autres chez l'hôte.
+     *  En mode prédiction (invité d'une partie en ligne), on ne décide rien : on bouge, on vise,
+     *  on joue le geste pour l'œil, et on note l'appui et le relâchement à envoyer à l'hôte. */
+    driveHuman(p, input, predict) {
       // Croix 8 directions façon Game Boy : vitesse pleine, direction quantifiée à 45°.
       let mx = 0, mz = 0;
       const mag = Math.hypot(input.stick.x, input.stick.y);
@@ -416,21 +438,60 @@
       // Une pression ne frappe pas : elle fige le robot et fait glisser la visée vers le bord choisi.
       for (const btn of input.just) {
         if (btn !== 'A' && btn !== 'B') continue;
-        if (!serving) {
+        if (!serving && !predict) {
           const t = this.diveTarget(p);
           if (t) { this.startDive(p, t.x, t.z); p.hold = null; return; }
         }
         p.hold = { btn, t0: this.time };
+        if (predict) this.netOut.push({ k: 'p', btn, ux: mx, uz: mz });
       }
       // Le coup part au relâchement, vers la cible atteinte par la visée.
       if (p.hold && !input.held[p.hold.btn]) {
         const h = p.hold; p.hold = null;
         const held = this.time - h.t0;
-        if (serving) this.serve(p, h.btn, this.serveTarget(p, mx, mz, held));
+        if (predict) {
+          // L'hôte tranchera : ici on ne fait que lancer le geste pour que la main suive l'œil.
+          this.netOut.push({ k: 'r', btn: h.btn, held, ux: mx, uz: mz });
+          if (p.swing <= 0) {
+            p.swing = SWING_TIME; p.swingLevel = 1;
+            p.swingShot = this.familyFor(this.shuttle.y, this.rallyTarget(p, mx, mz, held).z);
+          }
+        } else if (serving) this.serve(p, h.btn, this.serveTarget(p, mx, mz, held));
         else if (!p.act && p.swing <= 0) this.startSwing(p, { btn: h.btn, target: this.rallyTarget(p, mx, mz, held) });
       }
       // Viser cloue le robot sur place : c'est ce qui rend la croix utilisable comme mire.
       if (this.isCommitted(p)) { p.moveX = 0; p.moveZ = 0; }
+    }
+
+    /* ------------------------------------------------------- entrées venues du réseau */
+    /** Début de maintien annoncé par un joueur distant. `ago` rattrape le temps de transit. */
+    netPress(r, btn, ago) {
+      if (r.dive) return;
+      const serving = this.state === 'serve' && this.server === r;
+      if (!serving) {
+        if (this.state !== 'rally') return;
+        const t = this.diveTarget(r);
+        if (t) { this.startDive(r, t.x, t.z); r.hold = null; return; }
+      }
+      r.hold = { btn, t0: this.time - Math.max(0, Math.min(ago || 0, 2)) };
+    }
+
+    /** Relâchement annoncé par un joueur distant : il transmet la durée qu'il a réellement tenue,
+     *  si bien que la visée ne dépend pas de la latence — seul le tempo du contact en souffre. */
+    netRelease(r, btn, held, ux, uz, lag) {
+      const h = r.hold; r.hold = null;
+      if (r.dive) return;
+      const serving = this.state === 'serve' && this.server === r;
+      if (serving) { this.serve(r, btn, this.serveTarget(r, ux, uz, held)); return; }
+      if (this.state !== 'rally' || !h) return;
+      if (!r.act && r.swing <= 0) this.startSwing(r, { btn, target: this.rallyTarget(r, ux, uz, held), back: lag });
+    }
+
+    /** Déplacement et visée d'un joueur distant, envoyés en continu. */
+    netAim(r, ux, uz) {
+      r.aimX = ux; r.dirZ = uz;
+      if (r.dive || this.isCommitted(r)) { r.moveX = 0; r.moveZ = 0; return; }
+      r.moveX = ux; r.moveZ = uz;
     }
 
     /** Le robot est engagé dans un coup : il tient un bouton ou son geste n'a pas fini sa fenêtre de contact. */
@@ -449,10 +510,13 @@
     startSwing(r, opt) {
       const far = -r.side;
       const target = opt.target || { x: 0, z: far * AIM_DEPTH };
-      r.act = { btn: opt.btn || 'A', target, t0: this.time, dive: !!opt.dive, lastD: null };
+      // `back` remonte le début du geste : le coup d'un joueur distant est arrivé avec du retard,
+      // on le rejoue à l'instant où il l'a lancé pour que sa fenêtre de contact tombe juste.
+      const back = Math.max(0, Math.min(opt.back || 0, NET_BACK));
+      r.act = { btn: opt.btn || 'A', target, t0: this.time - back, dive: !!opt.dive, lastD: null };
       // La famille exacte se décide au contact (elle dépend de la hauteur du volant) ; on devine pour l'animation.
       const guess = opt.dive ? 'clear' : this.familyFor(this.shuttle.y, target.z);
-      r.swing = SWING_TIME; r.swingShot = guess; r.swingLevel = 1;
+      r.swing = SWING_TIME - back; r.swingShot = guess; r.swingLevel = 1;
       this.events.push({ type: 'swing', robot: r, shot: guess });
     }
 
@@ -611,7 +675,9 @@
     hit(r, d) {
       const s = this.shuttle;
       const a = r.act; r.act = null; r.hold = null;
-      const wide = 0.09 * this.racketLv(r, 'window');
+      // Un joueur distant place son robot avec un aller simple de retard : on lui élargit d'autant
+      // la zone de qualité, sinon la latence lui coûterait la précision qu'il a réellement eue.
+      const wide = 0.09 * this.racketLv(r, 'window') + (r.netLag ? Math.min(0.3, r.netLag * 2.2) : 0);
       const place = d <= 0.55 + wide ? 2 : d <= 1.0 + wide ? 1 : 0;
       const good = a.dive || this.goodStroke(r, a.btn);
       let level = good ? place : Math.min(place, 1);     // frapper du mauvais côté interdit le coup parfait
@@ -684,6 +750,8 @@
       const label = note || (level === 2 ? 'PARFAIT!' : level === 0 ? 'FAIBLE' : SHOT_NAMES[shot]);
       const color = sup ? '#f8d848' : (a.dive || jump) ? '#f8f8f0' : LEVEL_COLORS[level];
       this.addFx(label, s.x, s.y + 0.3, s.z, color, r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
+      this.netEvent = { n: (this.netEvent ? this.netEvent.n : 0) + 1, k: 1,
+                       a: this.robots.indexOf(r), b: SHOTS.indexOf(shot), c: level + (sup ? 10 : 0) };
       this.events.push({ type: 'hit', shot, level, robot: r, sup });
       this.onHitForTeam(1 - this.teamOf(r));
     }
@@ -825,6 +893,146 @@
       return level;
     }
 
+    /* ------------------------------------------------------ instantané réseau */
+    /** État complet de la partie, en nombres courts : c'est ce que l'hôte diffuse 30 fois par seconde.
+     *  Tout est absolu — un instantané perdu n'a aucune conséquence, le suivant redit tout. */
+    snapshot(seq) {
+      const s = this.shuttle, out = [
+        seq, STATES.indexOf(this.state), this.robots.indexOf(this.server),
+        r2(this.score[0]), r2(this.score[1]), this.robots.length,
+        this.robots.indexOf(this.lastHitter), this.serveInFlight ? 1 : 0, r2(s.t), this.longestRally, this.roundSeq || 0,
+        this.run.handicap ? HANDICAPS.indexOf(this.run.handicap) : -1,
+        PHASES.indexOf(this.phase), this.pendingRacket ? 1 : 0, this.winner == null ? -1 : this.winner,
+        this.run.stage || 0, this.run.level || 0,
+        r2(s.x), r2(s.y), r2(s.z), r2(s.vx), r2(s.vy), r2(s.vz),
+      ];
+      for (const r of this.robots) {
+        out.push(r2(r.x), r2(r.z), r2(r.vx), r2(r.vz), r.court,
+                 Math.round(r.energy), r2(r.swing), SHOTS.indexOf(r.swingShot), r.swingLevel,
+                 r2(r.jumpT), r.dive ? r2(r.dive.t) : -1,
+                 r.hold ? (r.hold.btn === 'B' ? 2 : 1) : 0, r.hold ? r2(this.time - r.hold.t0) : 0,
+                 r2(r.aimX || 0), r2(r.dirZ || 0), r.act ? 1 : 0, Math.round((r.netLag || 0) * 1000),
+                 r.stats.hits, r.stats.perfect, r.stats.smashes, r.stats.whiffs, r.stats.supers);
+      }
+      const e = this.netEvent;
+      out.push(e ? e.n : 0, e ? e.k : 0, e ? e.a : 0, e ? e.b : 0, e ? e.c : 0);
+      return out;
+    }
+
+    /** Applique un instantané de l'hôte. `map` traduit l'ordre local vers l'ordre de l'hôte,
+     *  `flip` retourne le terrain pour le joueur qui, chez lui, joue toujours en bas. */
+    applySnapshot(a, map, flip, keepOwn, lead) {
+      if (!a || a.length < 23) return;
+      const f = flip ? -1 : 1;
+      const st = STATES[a[1]];
+      if (st) this.state = st;
+      this.score = [a[3], a[4]];
+      const n = a[5] | 0;
+      const srvCanon = a[2];
+      const s = this.shuttle;
+      const hitCanon = a[6];
+      this.serveInFlight = !!a[7];
+      this.longestRally = a[9];
+      this.hostRound = a[10];
+      // Le protocole du boss est tiré au sort par l'hôte : sans cela chaque écran aurait le sien.
+      const hc = a[11] >= 0 ? HANDICAPS[a[11]] : null;
+      if (this.run && this.run.handicap !== hc) this.run.handicap = hc;
+      // La phase dit à l'invité s'il doit montrer un choix de carte ou l'écran de fin : sans elle,
+      // il afficherait la fin d'une run que l'hôte, lui, veut simplement continuer.
+      this.phase = PHASES[a[12]] || null;
+      this.pendingRacket = !!a[13];
+      this.winner = a[14] < 0 ? null : a[14];
+      this.run.stage = a[15]; this.run.level = a[16];
+      s.px = s.x; s.py = s.y; s.pz = s.z;
+      const ovx = s.vx, ovy = s.vy, ovz = s.vz;
+      s.t = a[8];                         // horloge de l'échange : l'interception s'y réfère
+      s.x = a[17] * f; s.y = a[18]; s.z = a[19] * f;
+      s.vx = a[20] * f; s.vy = a[21]; s.vz = a[22] * f;
+      // L'instantané décrit un passé vieux d'un aller simple : on le rejoue en avant jusqu'au
+      // présent de l'hôte, sinon l'invité viserait toujours là où le volant n'est plus.
+      const ahead = Math.max(0, Math.min(lead || 0, 0.3));
+      const moved = Math.abs(ovx - s.vx) + Math.abs(ovy - s.vy) + Math.abs(ovz - s.vz) > 0.05;
+      if (ahead && this.state === 'rally') {
+        const n = Math.max(1, Math.ceil(ahead / (1 / 120)));
+        for (let i = 0; i < n; i++) { P.step(s, ahead / n); s.t += ahead / n; }
+      }
+      // La trajectoire prédite ne se recalcule qu'au changement de vitesse : c'est là qu'on a frappé.
+      if (moved || !this.pred) {
+        this.pred = P.predict(s);
+        // Elle repart de l'instant courant : on la recale sur l'horloge de l'échange.
+        for (const q of this.pred.path) q.t += s.t;
+        this.pred.landing.t += s.t;
+      }
+      const W = 22;
+      this.lastHitter = null;
+      for (let li = 0; li < this.robots.length && li < n; li++) {
+        const ci = map ? map[li] : li;
+        if (ci === hitCanon) this.lastHitter = this.robots[li];
+      }
+      for (let li = 0; li < this.robots.length && li < n; li++) {
+        const r = this.robots[li], o = 23 + (map ? map[li] : li) * W;
+        if (map && map[li] === srvCanon) this.server = r;
+        const own = keepOwn && r === this.player;
+        const nx = a[o] * f, nz = a[o + 1] * f;
+        if (own) {
+          // Notre propre robot est prédit en local : on le ramène doucement vers l'autorité
+          // au lieu de le téléporter, sinon chaque instantané ferait sauter l'image.
+          // Un plongeon n'est pas prédit en local : on recale d'un coup, sinon le robot traîne derrière.
+          const gap = Math.hypot(nx - r.x, nz - r.z);
+          const k = gap > 1.5 || r.dive || a[o + 10] >= 0 ? 1 : 0.18;
+          r.x += (nx - r.x) * k; r.z += (nz - r.z) * k;
+        } else {
+          r.vx = a[o + 2] * f; r.vz = a[o + 3] * f;
+          r.x = clamp(nx + r.vx * ahead, -3.4, 3.4); r.z = nz + r.vz * ahead;
+          r.aimX = a[o + 13] * f; r.dirZ = a[o + 14] * f;
+          const hb = a[o + 11];
+          r.hold = hb ? { btn: hb === 2 ? 'B' : 'A', t0: this.time - a[o + 12] } : null;
+          r.act = a[o + 15] ? (r.act || { btn: 'A', target: { x: 0, z: 0 }, t0: this.time, dive: false, lastD: null }) : null;
+        }
+        r.court = a[o + 4];
+        r.energy = a[o + 5];
+        r.swing = a[o + 6];
+        r.swingShot = SHOTS[a[o + 7]] || null;
+        r.swingLevel = a[o + 8];
+        r.jumpT = a[o + 9];
+        const dv = a[o + 10];
+        r.dive = dv >= 0 ? (r.dive ? (r.dive.t = dv, r.dive) : { t: dv, dx: 0, dz: 0, sp: 0 }) : null;
+        r.stats.hits = a[o + 17]; r.stats.perfect = a[o + 18];
+        r.stats.smashes = a[o + 19]; r.stats.whiffs = a[o + 20]; r.stats.supers = a[o + 21];
+      }
+      const own = this.robots.indexOf(this.player);
+      const lag = own >= 0 ? a[23 + (map ? map[own] : own) * W + 16] / 1000 : 0;
+      return { seq: a[0], lag, event: { n: a[a.length - 5], k: a[a.length - 4], a: a[a.length - 3], b: a[a.length - 2], c: a[a.length - 1] } };
+    }
+
+    /** Côté invité : on n'arbitre rien, on prolonge la simulation entre deux instantanés.
+     *  Le volant suit la même intégration que chez l'hôte, donc l'extrapolation reste fidèle. */
+    updateRemote(dt, input, gdt) {
+      this.time += dt;
+      this.matchTime += dt;
+      if (this.message) this.message.t += dt;
+      if (this.state === 'serve' || this.state === 'rally') this.driveHuman(this.player, input, true);
+      for (const r of this.robots) {
+        if (r.dive) { r.dive.t += dt; if (r.dive.t >= DIVE_TOTAL) r.dive = null; }
+        if (r === this.player) this.moveRobot(r, gdt);
+        else { r.x = clamp(r.x + r.vx * gdt, -3.4, 3.4); r.z += r.vz * gdt; r.walk += Math.hypot(r.vx, r.vz) * gdt * 2.2; }
+        if (r.swing > 0) r.swing -= dt;
+        if (r.jumpT > 0) r.jumpT -= dt;
+      }
+      const s = this.shuttle;
+      if (this.state === 'rally') {
+        const sdt = gdt * this.shuttleRate();
+        const n = Math.max(1, Math.ceil(sdt / (1 / 120)));
+        for (let i = 0; i < n; i++) { s.px = s.x; s.py = s.y; s.pz = s.z; P.step(s, sdt / n); s.t += sdt / n; }
+        const sp = Math.hypot(s.vx, s.vy, s.vz);
+        if (sp > 11) { s.trail.push({ x: s.x, y: s.y, z: s.z }); if (s.trail.length > 10) s.trail.shift(); }
+        else if (s.trail.length) s.trail.shift();
+      } else if (s.trail.length) s.trail.shift();
+      for (const f of this.fx) f.t += dt;
+      this.fx = this.fx.filter((f) => f.t < f.life);
+      this.shake = Math.max(0, this.shake - dt);
+    }
+
     /* ------------------------------------------------------------------ fin d'échange */
     checkNetAndGround() {
       const s = this.shuttle;
@@ -881,11 +1089,14 @@
       for (const r of this.robots) { r.hold = null; r.act = null; }
       const good = t === 0;
       this.message = { text: reason, sub: good ? 'Point pour toi' : 'Point pour eux', t: 0, good };
+      this.netEvent = { n: (this.netEvent ? this.netEvent.n : 0) + 1, k: 2, a: t, b: REASONS.indexOf(reason), c: 0 };
       this.events.push({ type: 'point', winner: t, reason });
     }
 
     /** −1 : on continue. 0 : palier franchi (carte). 1 : le bot a fait 15, la run s'arrête. */
     matchWinner() {
+      // En duel, aucun camp n'arrête la run : le niveau change de main et on repart.
+      if (this.run.versus) return Math.max(this.score[0], this.score[1]) >= this.nextStep() ? 0 : -1;
       if (this.score[1] >= LEVEL_TARGET) return 1;
       // Le palier tombe dès que l'un des deux l'atteint : une carte de rattrapage si le bot mène.
       if (Math.max(this.score[0], this.score[1]) >= this.nextStep()) return 0;
@@ -903,6 +1114,11 @@
         const lastStep = this.run.stage >= CARD_STEPS.length - 1;
         const lastLevel = this.run.level >= DIFF_ORDER.length - 1;
         this.pendingRacket = lastStep;
+        // Duel : le niveau se compte au vainqueur, et la manche continue tant qu'il reste des niveaux.
+        if (this.run.versus && lastStep) {
+          this.run.wins = this.run.wins || [0, 0];
+          this.run.wins[this.score[0] > this.score[1] ? 0 : 1]++;
+        }
         this.phase = (lastStep && lastLevel) ? 'won' : 'cards';
       }
       this.events.push({ type: 'end', winner: w, phase: this.phase });
@@ -917,5 +1133,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SWEET, STROKE_OFF, TAP_TIME, SPREAD_TIME, SPREAD_MAX, SMASH_H, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SHOTS, REASONS, SWEET, STROKE_OFF, TAP_TIME, SPREAD_TIME, SPREAD_MAX, SMASH_H, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);
