@@ -23,6 +23,7 @@
 
   const SHOT_NAMES = { clear: 'DÉGAGÉ', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
+  const MATE_COLORS = [null, '#f8d848', '#58e8f8', '#ff9ad8'];   // teintes des autres humains en ligne
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
   const STROKE_OFF = 0.28;     // le point idéal se décale du côté de la raquette (coup droit) ou de l'autre (revers)
@@ -98,9 +99,12 @@
   const rnd = (a, b) => a + Math.random() * (b - a);
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
-  function makeRobot(side, chassisKey, isAI) {
+  const NO_UP = { cards: {}, racket: {} };   // un robot piloté par la machine n'a pas de deck
+
+  function makeRobot(side, chassisKey, isAI, slot) {
     return {
-      side, isAI, chassis: CHASSIS[chassisKey], color: CHASSIS[chassisKey].color, accent: CHASSIS[chassisKey].accent,
+      side, isAI, slot: slot == null ? -1 : slot, up: NO_UP, court: 1,
+      chassis: CHASSIS[chassisKey], color: CHASSIS[chassisKey].color, accent: CHASSIS[chassisKey].accent,
       x: 0, z: side * 3.5, vx: 0, vz: 0, moveX: 0, moveZ: 0, walk: 0,
       energy: 0,
       hold: null, act: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0, dive: null,
@@ -121,8 +125,10 @@
       this.shake = 0;
       this.hitStop = 0;
       this.robots = [];
+      this.doubles = false;
+      this.seating = null;
       this.score = [0, 0];
-      this.run = { level: 0, round: 0, cards: {}, racket: {} };
+      this.run = { level: 0, stage: 0, decks: [], handicap: null, levels: 0 };
       this.phase = null;
     }
 
@@ -130,16 +136,19 @@
     startExhibition(opts) {
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
-      this.startMatch({ chassis: this.chassisKey, difficulty: opts.difficulty || 'rookie', assist: this.assist });
+      this.seating = { doubles: !!opts.doubles, humans: opts.humans || null };
+      this.startMatch({ chassis: this.chassisKey, difficulty: opts.difficulty || 'rookie', assist: this.assist,
+                        doubles: this.seating.doubles, humans: this.seating.humans });
     }
 
     /** Démarre une run complète : quatre niveaux de trois manches. */
     startRun(opts) {
       // startLevel n'existe que pour les outils de capture : une run normale commence toujours au niveau 1.
       const start = clamp(Math.floor(opts.startLevel || 0), 0, DIFF_ORDER.length - 1);
-      this.run = { level: start, stage: 0, cards: {}, racket: {}, handicap: null, levels: 0 };
+      this.run = { level: start, stage: 0, decks: [], handicap: null, levels: 0 };
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
+      this.seating = { doubles: !!opts.doubles, humans: opts.humans || null };
       this.startRound();
     }
 
@@ -147,7 +156,9 @@
     startRound() {
       // Dernier niveau : le boss impose un protocole tiré au sort.
       if (this.run.level >= DIFF_ORDER.length - 1 && !this.run.handicap) this.run.handicap = HANDICAPS[Math.floor(Math.random() * HANDICAPS.length)];
-      this.startMatch({ chassis: this.chassisKey, difficulty: DIFF_ORDER[Math.min(this.run.level, DIFF_ORDER.length - 1)], assist: this.assist, keepRun: true });
+      const seat = this.seating || {};
+      this.startMatch({ chassis: this.chassisKey, difficulty: DIFF_ORDER[Math.min(this.run.level, DIFF_ORDER.length - 1)],
+                        assist: this.assist, keepRun: true, doubles: !!seat.doubles, humans: seat.humans || null });
     }
 
     /** Après le choix des cartes : on reprend le même match, ou on passe à l'adversaire suivant. */
@@ -163,14 +174,29 @@
     /** Le volant survolté avance plus vite que le reste du jeu. */
     shuttleRate() { return this.handicapIs('fast') ? 1.3 : 1; }
 
+    /* ------------------------------------------------------------------ camps */
+    /** 0 = le camp du joueur local (z < 0), 1 = le camp d'en face. */
+    teamOf(r) { return r.side < 0 ? 0 : 1; }
+    sideOfTeam(t) { return t === 0 ? -1 : 1; }
+    teamRobots(t) { const sd = this.sideOfTeam(t); return this.robots.filter((r) => r.side === sd); }
+    foes(r) { return this.robots.filter((o) => o.side !== r.side); }
+    /** Le coéquipier, ou null en simple. */
+    partner(r) { return this.robots.find((o) => o !== r && o.side === r.side) || null; }
+
     /* --------------------------------------------------- améliorations acquises */
-    cardLv(k) { return this.run.cards[k] || 0; }
-    racketLv(k) { return this.run.racket[k] || 0; }
-    /** Niveau effectif de l'optique : la carte, ou l'aide activée dans le menu. */
-    eyesLv() { return Math.max(this.cardLv('eyes'), this.assist ? 1 : 0); }
+    /** Deck d'un emplacement humain : chaque joueur garde ses propres cartes. */
+    deck(slot) {
+      const d = this.run.decks || (this.run.decks = []);
+      return d[slot] || (d[slot] = { cards: {}, racket: {} });
+    }
+    /** Les robots pilotés par la machine n'ont pas de deck : tout y vaut 0. */
+    cardLv(r, k) { return r.up.cards[k] || 0; }
+    racketLv(r, k) { return r.up.racket[k] || 0; }
+    /** Niveau effectif de l'optique du joueur local : sa carte, ou l'aide activée dans le menu. */
+    eyesLv() { return Math.max(this.cardLv(this.player, 'eyes'), this.assist ? 1 : 0); }
     /** Fraction de la visée déjà glissée vers le bord : 0 au centre, 1 sur la ligne, au-delà dehors. */
     spreadF(r, held) {
-      const t = SPREAD_TIME * (r.isAI ? 1 : 1 - 0.18 * this.cardLv('legs'));
+      const t = SPREAD_TIME * (1 - 0.18 * this.cardLv(r, 'legs'));
       return clamp((held - TAP_TIME) / t, 0, SPREAD_MAX);
     }
     /** Cible d'un coup d'échange : centre du camp adverse, décalée vers le bord choisi. */
@@ -186,7 +212,7 @@
     /** Dispersion attendue, en mètres : elle dépend du placement et du cordage. */
     spreadOf(r, level, good) {
       const base = SPREAD_BY_LEVEL[level];
-      const k = r.isAI ? this.diff.aimNoise : Math.max(0.1, 1 - 0.3 * this.racketLv('precision'));
+      const k = r.isAI ? this.diff.aimNoise : Math.max(0.1, 1 - 0.3 * this.racketLv(r, 'precision'));
       return base * k * (good ? 1 : 1.5);
     }
     /** Le volant est-il du côté de la raquette ? A = coup droit (à droite), B = revers (à gauche). */
@@ -214,8 +240,8 @@
         || (serving && (Math.abs(t.z) < COURT.shortService || t.x * this.serveBoxSign <= 0));
       return { x: t.x, z: t.z, f: t.f, out, spread: this.spreadOf(p, 1, true), btn: h.btn };
     }
-    jumpReach() { return JUMP_REACH + 0.25 * this.cardLv('thruster'); }
-    hitWindow() { const w = 0.03 * this.racketLv('window'); return [SWING_HIT0 - w * 0.5, SWING_HIT1 + w]; }
+    jumpReach(r) { return JUMP_REACH + 0.25 * this.cardLv(r, 'thruster'); }
+    hitWindow(r) { const w = 0.03 * this.racketLv(r, 'window'); return [SWING_HIT0 - w * 0.5, SWING_HIT1 + w]; }
 
     /** Trois cartes tirées au hasard parmi celles qui ne sont pas au maximum. */
     offer(list, owned) {
@@ -224,23 +250,35 @@
       while (out.length < 3 && pool.length) out.push(pool.splice(Math.floor(Math.random() * pool.length), 1)[0]);
       return out;
     }
-    offerCards() { return this.offer(CARDS, this.run.cards); }
-    offerRackets() { return this.offer(RACKETS, this.run.racket); }
-    takeCard(k) { this.run.cards[k] = (this.run.cards[k] || 0) + 1; }
-    takeRacket(k) { this.run.racket[k] = (this.run.racket[k] || 0) + 1; }
+    offerCards(slot) { return this.offer(CARDS, this.deck(slot || 0).cards); }
+    offerRackets(slot) { return this.offer(RACKETS, this.deck(slot || 0).racket); }
+    takeCard(k, slot) { const c = this.deck(slot || 0).cards; c[k] = (c[k] || 0) + 1; }
+    takeRacket(k, slot) { const c = this.deck(slot || 0).racket; c[k] = (c[k] || 0) + 1; }
 
     startMatch(opts) {
       this.chassisKey = opts.chassis || 'balanced';
       this.diffKey = opts.difficulty || 'rookie';
       this.diff = DIFFICULTY[this.diffKey];
       this.assist = !!opts.assist;
-      if (!opts.keepRun) this.run = { level: Math.max(0, DIFF_ORDER.indexOf(this.diffKey)), stage: 0, cards: {}, racket: {}, handicap: null, levels: 0, solo: true };
+      if (!opts.keepRun) this.run = { level: Math.max(0, DIFF_ORDER.indexOf(this.diffKey)), stage: 0, decks: [], handicap: null, levels: 0, solo: true };
       this.phase = null;
-      this.robots = [makeRobot(-1, this.chassisKey, false), makeRobot(1, this.diff.chassis, true)];
-      this.robots[1].color = this.diff.color; this.robots[1].accent = '#ffd6e6';
-      this.robots[0].sheet = 'rg-b1'; this.robots[0].tint = this.chassisKey !== 'balanced';
-      this.robots[1].sheet = this.diff.sheet || 'rg-b1'; this.robots[1].tint = this.diff.tint !== false; this.robots[1].hover = !!this.diff.hover;
+      this.doubles = !!opts.doubles;
+      // Emplacements humains : 0 = joueur local, puis les éventuels coéquipiers ou adversaires en ligne.
+      const humans = opts.humans || { 0: { chassis: this.chassisKey } };
+      this.robots = [];
+      const seats = this.doubles ? [[-1, 0], [1, 2], [-1, 1], [1, 3]] : [[-1, 0], [1, 1]];
+      for (const [side, slot] of seats) {
+        const h = humans[slot];
+        const r = makeRobot(side, h ? h.chassis || 'balanced' : this.diff.chassis, !h, h ? slot : -1);
+        if (h) { r.up = this.deck(slot); r.sheet = 'rg-b1'; r.tint = (h.chassis || 'balanced') !== 'balanced'; r.name = h.name || null; }
+        else { r.color = this.diff.color; r.accent = '#ffd6e6'; r.sheet = this.diff.sheet || 'rg-b1'; r.tint = this.diff.tint !== false; r.hover = !!this.diff.hover; }
+        this.robots.push(r);
+      }
+      // Le coéquipier humain se distingue du joueur local par sa teinte.
+      for (const r of this.robots) if (!r.isAI && r.slot > 0) { r.color = MATE_COLORS[r.slot] || r.color; r.tint = true; }
+      for (const r of this.robots) r.court = this.robots.indexOf(r) < 2 ? 1 : -1;
       this.score = [0, 0];
+      this.servedLast = [null, null];
       this.server = this.robots[0];
       this.lastHitter = null;
       this.pred = null;
@@ -253,16 +291,28 @@
       this.setupServe();
     }
 
-    other(r) { return r === this.robots[0] ? this.robots[1] : this.robots[0]; }
     get player() { return this.robots[0]; }
-    get bot() { return this.robots[1]; }
+    /** Le premier robot d'en face : celui que le HUD et les tests désignent comme « le bot ». */
+    get bot() { return this.robots.find((r) => r.side > 0); }
+
+    /** Abscisse du carré de service d'un robot : son camp et son côté donnent la place. */
+    courtX(r) { return -r.side * r.court * 1.1; }
 
     setupServe() {
-      const srv = this.server, rcv = this.other(srv);
-      const even = this.score[srv === this.robots[0] ? 0 : 1] % 2 === 0;
-      const serverX = -srv.side * (even ? 1 : -1) * 1.1;
-      srv.x = serverX; srv.z = srv.side * 3.2; srv.vx = srv.vz = 0; srv.hold = srv.act = null; srv.dive = null;
-      rcv.x = -serverX; rcv.z = rcv.side * 3.6; rcv.vx = rcv.vz = 0; rcv.hold = rcv.act = null; rcv.dive = null;
+      const srv = this.server, st = this.teamOf(srv);
+      this.servedLast[st] = srv;
+      // Score pair : on sert du carré droit ; impair : du carré gauche. Le coéquipier prend l'autre.
+      srv.court = this.score[st] % 2 === 0 ? 1 : -1;
+      const mate = this.partner(srv);
+      if (mate) mate.court = -srv.court;
+      // Le receveur est celui qui fait face au serveur en diagonale : même `court`, camp opposé.
+      const rcv = this.foes(srv).find((r) => r.court === srv.court) || this.foes(srv)[0];
+      for (const r of this.robots) { r.vx = r.vz = 0; r.hold = r.act = null; r.dive = null; }
+      for (const r of this.robots) {
+        r.x = this.courtX(r);
+        // Le serveur avance, son coéquipier couvre le fond ; en face, le receveur avance et l'autre recule.
+        r.z = r.side * (r === srv ? 3.2 : r === rcv ? 3.6 : r.side === srv.side ? 4.8 : 4.4);
+      }
       this.serveBoxSign = Math.sign(rcv.x) || 1;
       const s = this.shuttle;
       s.x = srv.x + 0.15 * (-srv.side); s.y = 1.0; s.z = srv.z - srv.side * 0.45;
@@ -337,7 +387,7 @@
       // Un coup dont la fenêtre de contact est passée sans toucher : frappe dans le vide.
       for (const r of this.robots) {
         const a = r.act;
-        if (a && !a.dive && this.time - a.t0 > (r.isAI ? SWING_HIT1 : this.hitWindow()[1])) this.whiff(r);
+        if (a && !a.dive && this.time - a.t0 > this.hitWindow(r)[1]) this.whiff(r);
       }
 
       for (const f of this.fx) f.t += dt;
@@ -420,11 +470,11 @@
 
     speedOf(r) {
       if (r.isAI) return this.diff.speed * (1 + 0.04 * (this.run.stage || 0));   // le bot durcit d'un palier à l'autre
-      return r.chassis.speed * (1 + 0.12 * this.cardLv('speed')) * (this.handicapIs('slow') ? 0.75 : 1);
+      return r.chassis.speed * (1 + 0.12 * this.cardLv(r, 'speed')) * (this.handicapIs('slow') ? 0.75 : 1);
     }
     reachOf(r) {
       if (r.isAI) return this.diff.reach || r.chassis.reach;
-      return r.chassis.reach + 0.18 * this.racketLv('reach');
+      return r.chassis.reach + 0.18 * this.racketLv(r, 'reach');
     }
 
     /** Point d'interception sur la trajectoire prédite, et s'il est atteignable en courant. */
@@ -524,7 +574,7 @@
       this.message = null;
       srv.swing = SWING_TIME; srv.swingShot = 'serve'; srv.swingLevel = 1;
       srv.stats.hits++;
-      this.onHitFor(this.other(srv));
+      this.onHitForTeam(1 - this.teamOf(srv));
       this.events.push({ type: 'hit', shot: 'serve', level: 1, robot: srv });
     }
 
@@ -535,7 +585,7 @@
         const a = r.act;
         if (!a || this.lastHitter === r) continue;
         const age = this.time - a.t0;
-        const [w0, w1] = r.isAI ? [SWING_HIT0, SWING_HIT1] : this.hitWindow();
+        const [w0, w1] = this.hitWindow(r);
         if (a.dive) { if (r.dive && r.dive.t > DIVE_LUNGE) continue; }
         else if (age < w0 || age > w1) continue;                   // hors de la fenêtre de contact
         if (s.z * r.side < -0.25) { a.lastD = null; continue; }
@@ -544,7 +594,7 @@
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - sweetX, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const maxY = r.isAI ? JUMP_REACH : this.jumpReach();
+        const maxY = this.jumpReach(r);
         let reach = this.reachOf(r);
         if (r.dive) reach += DIVE_REACH;
         const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
@@ -561,7 +611,7 @@
     hit(r, d) {
       const s = this.shuttle;
       const a = r.act; r.act = null; r.hold = null;
-      const wide = r.isAI ? 0 : 0.09 * this.racketLv('window');
+      const wide = 0.09 * this.racketLv(r, 'window');
       const place = d <= 0.55 + wide ? 2 : d <= 1.0 + wide ? 1 : 0;
       const good = a.dive || this.goodStroke(r, a.btn);
       let level = good ? place : Math.min(place, 1);     // frapper du mauvais côté interdit le coup parfait
@@ -635,13 +685,13 @@
       const color = sup ? '#f8d848' : (a.dive || jump) ? '#f8f8f0' : LEVEL_COLORS[level];
       this.addFx(label, s.x, s.y + 0.3, s.z, color, r.isAI ? 0.8 : 1.1, r.isAI ? 15 : 22);
       this.events.push({ type: 'hit', shot, level, robot: r, sup });
-      this.onHitFor(this.other(r));
+      this.onHitForTeam(1 - this.teamOf(r));
     }
 
     /** Forme de trajectoire pour atteindre la cible déjà décidée par la visée. */
     shotSpec(r, shot, level, target, sup) {
       const y = this.shuttle.y;
-      const pw = r.isAI ? 1 : 1 + 0.15 * this.cardLv('power');
+      const pw = 1 + 0.15 * this.cardLv(r, 'power');
       switch (shot) {
         case 'clear': {
           const angle = level === 0 ? 58 : (y > 1.6 ? 42 : 50);
@@ -664,6 +714,9 @@
       }
     }
 
+    /** Tout le camp qui va devoir renvoyer le volant se remet en alerte. */
+    onHitForTeam(t) { for (const r of this.teamRobots(t)) this.onHitFor(r); }
+
     /** Appelé quand `r` va devoir renvoyer le volant. */
     onHitFor(r) {
       if (!r.isAI) return;
@@ -672,7 +725,7 @@
       // un smash surprend : réaction plus lente
       r.ai.reactAt = this.time + d.reaction * rnd(0.8, 1.25) * (sp > 16 ? 1.4 : 1);
       r.ai.noiseX = rnd(-1, 1) * d.posNoise;
-      const out = this.pred && !this.pred.net && !P.inSingles(this.pred.landing.x, this.pred.landing.z, -0.1);
+      const out = this.pred && !this.pred.net && !this.inCourt(this.pred.landing.x, this.pred.landing.z, -0.1);
       r.ai.judgedOut = out && Math.random() < d.judge;
       r.ai.willDive = Math.random() < (d.dive || 0);   // décidé une fois par échange, pas à chaque image
       r.ai.swingErr = rnd(-1, 1) * d.errorRate * 0.35; // décalage du geste : c'est ce qui fait rater le bot
@@ -680,17 +733,36 @@
     }
 
     /* ------------------------------------------------------------------ IA */
-    updateAI(dt) {
-      const ai = this.bot;
+    updateAI(dt) { for (const r of this.robots) if (r.isAI) this.driveAI(r, dt); }
+
+    /** En double, un seul des deux robots va chercher le volant : celui qui arrive le plus vite. */
+    aiTakesIt(ai, point) {
+      const mate = this.partner(ai);
+      if (!mate || !mate.isAI || mate.dive) return true;
+      const cost = (r) => Math.hypot(point.x - r.x, point.z + r.side * SWEET - r.z) / this.speedOf(r);
+      const mine = cost(ai), theirs = cost(mate);
+      // À égalité, c'est celui qui est du même côté que le volant qui prend, pour ne pas se croiser.
+      if (Math.abs(mine - theirs) < 0.05) return Math.sign(ai.x || 1) === Math.sign(point.x || 1);
+      return mine <= theirs;
+    }
+
+    driveAI(ai, dt) {
       const s = this.shuttle;
       const side = ai.side;
       let tx = 0, tz = side * 3.2;
       if (ai.dive) { ai.moveX = 0; ai.moveZ = 0; return; }      // plongeon en cours
       const incoming = this.state === 'rally' && this.lastHitter !== ai && this.pred;
 
+      const mate = this.partner(ai);
       if (incoming && this.time >= ai.ai.reactAt && !ai.ai.judgedOut) {
         const info = this.interceptInfo(ai);
-        const target = info && info.point;
+        let target = info && info.point;
+        // Le coéquipier qui ne prend pas le volant couvre le reste du camp au lieu de le suivre.
+        if (target && !this.aiTakesIt(ai, target)) {
+          tx = clamp(-target.x * 0.7, -2.2, 2.2); tz = ai.side * (Math.abs(target.z) > 4 ? 2.6 : 4.8);
+          target = null;
+          if (ai.act && !ai.act.dive) ai.act = null;
+        }
         if (target && info.reachable === false && ai.ai.willDive && Math.hypot(ai.vx, ai.vz) >= DIVE_MIN_SPEED) {
           const gx = target.x, gz = target.z + side * SWEET;
           const gap = Math.hypot(gx - ai.x, gz - ai.z), dtp = target.t - s.t;
@@ -715,6 +787,8 @@
         if (this.state === 'rally' && this.lastHitter === ai && this.pred) tx = clamp(this.pred.landing.x * 0.25, -0.8, 0.8);
         if (ai.act && !incoming && !ai.act.dive) ai.act = null;
       }
+      // En double, on ne se marche pas dessus : celui qui ne porte pas le coup s'écarte.
+      if (mate && !ai.act && Math.hypot(mate.x - tx, mate.z - tz) < 1.2) tx += Math.sign(ai.x - mate.x || 1) * 1.2;
 
       if (this.isCommitted(ai)) { ai.moveX = ai.moveZ = 0; return; }   // même contrainte que le joueur
       const dx = tx - ai.x, dz = tz - ai.z;
@@ -728,8 +802,10 @@
 
     /** Le bot choisit une zone plutôt qu'un type de coup : la trajectoire en découle. */
     aiAim(ai, p) {
-      const d = this.diff, far = -ai.side, opp = this.other(ai);
-      const away = opp.x > 0.35 ? -1 : opp.x < -0.35 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+      const d = this.diff, far = -ai.side, opps = this.foes(ai);
+      // On vise à l'opposé du barycentre adverse : en double, c'est le trou entre les deux.
+      const mid = opps.reduce((a, o) => a + o.x, 0) / (opps.length || 1);
+      const away = mid > 0.35 ? -1 : mid < -0.35 ? 1 : (Math.random() < 0.5 ? -1 : 1);
       const h = p.y, r = Math.random();
       let uz;
       if (h >= 1.9 && (ai.energy >= MAX_ENERGY || r < d.aggression)) uz = rnd(-0.2, 0.2);        // smash mi-court
@@ -759,7 +835,7 @@
           s.z = s.pz < 0 ? -0.04 : 0.04;
           s.y = y;
           s.vx *= 0.05; s.vz = (s.pz < 0 ? -1 : 1) * 0.3; s.vy = Math.min(0, s.vy * 0.1);
-          this.endPoint(this.other(this.lastHitter), 'FILET');
+          this.endPoint(1 - this.teamOf(this.lastHitter), 'FILET');
           return;
         }
       }
@@ -768,27 +844,44 @@
 
     resolveLanding() {
       const s = this.shuttle;
-      const hitter = this.lastHitter, other = this.other(hitter);
-      const inCourt = P.inSingles(s.x, s.z);
+      const hitter = this.lastHitter, mine = this.teamOf(hitter), theirs = 1 - mine;
       const landSide = s.z < 0 ? -1 : 1;
-      if (!inCourt) this.endPoint(other, 'OUT');
-      else if (landSide === hitter.side) this.endPoint(other, 'RATÉ');
-      else if (this.serveInFlight && (Math.abs(s.z) < COURT.shortService || s.x * this.serveBoxSign < 0)) this.endPoint(other, 'FAUTE DE SERVICE');
-      else this.endPoint(hitter, hitter.isAI ? 'POINT BOT' : 'POINT !');
+      if (!this.inCourt(s.x, s.z)) this.endPoint(theirs, 'OUT');
+      else if (landSide === hitter.side) this.endPoint(theirs, 'RATÉ');
+      else if (this.serveInFlight && !this.inServiceBox(s.x, s.z)) this.endPoint(theirs, 'FAUTE DE SERVICE');
+      else this.endPoint(mine, mine === 0 ? 'POINT !' : this.teamRobots(mine).every((r) => r.isAI) ? 'POINT BOT' : 'POINT ADVERSE');
     }
 
-    endPoint(winner, reason) {
-      const idx = winner === this.robots[0] ? 0 : 1;
-      // Le volant lesté fait rapporter davantage chaque point gagné par le joueur.
-      this.score[idx] += idx === 0 ? 1 + 0.25 * this.cardLv('shuttle') : 1;
+    /** Limites du terrain : le double est plus large que le simple. */
+    inCourt(x, z, tol) {
+      const w = this.doubles ? COURT.halfWidthDoubles : COURT.halfWidthSingles;
+      const t = tol == null ? 0.03 : tol;
+      return Math.abs(x) <= w + t && Math.abs(z) <= COURT.halfLength + t;
+    }
+    /** Boîte de service adverse : plus large mais moins profonde en double. */
+    inServiceBox(x, z) {
+      if (x * this.serveBoxSign < 0) return false;
+      if (Math.abs(z) < COURT.shortService) return false;
+      const back = this.doubles ? COURT.longServiceDoubles : COURT.halfLength;
+      return Math.abs(z) <= back + 0.03 && Math.abs(x) <= (this.doubles ? COURT.halfWidthDoubles : COURT.halfWidthSingles) + 0.03;
+    }
+
+    /** `t` est l'indice du camp qui marque : 0 le camp du joueur local, 1 celui d'en face. */
+    endPoint(t, reason) {
+      // Le volant lesté fait rapporter davantage : on retient le meilleur exemplaire du camp.
+      const bonus = Math.max(0, ...this.teamRobots(t).map((r) => this.cardLv(r, 'shuttle')));
+      this.score[t] += 1 + 0.25 * bonus;
       this.state = 'point';
       this.pointTimer = 1.5;
-      this.pointWinner = winner;
-      this.server = winner;
+      this.pointWinner = t;
+      // Le camp qui marque sert : le même robot s'il tenait déjà le service, l'autre sinon.
+      const win = this.teamRobots(t);
+      if (this.server && this.teamOf(this.server) === t) { /* il garde le service */ }
+      else this.server = win.find((r) => r !== this.servedLast[t]) || win[0];
       for (const r of this.robots) { r.hold = null; r.act = null; }
-      const good = idx === 0;
-      this.message = { text: reason, sub: good ? 'Point pour toi' : 'Point pour le bot', t: 0, good };
-      this.events.push({ type: 'point', winner: idx, reason });
+      const good = t === 0;
+      this.message = { text: reason, sub: good ? 'Point pour toi' : 'Point pour eux', t: 0, good };
+      this.events.push({ type: 'point', winner: t, reason });
     }
 
     /** −1 : on continue. 0 : palier franchi (carte). 1 : le bot a fait 15, la run s'arrête. */

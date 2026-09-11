@@ -250,6 +250,57 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('le relâchement engage le service', g.state === 'rally' && !p.hold, `état ${g.state}`);
 }
 
+// Double 2v2 : quatre robots, terrain élargi, service en diagonale et rotation des carrés.
+{
+  const g = new RS.Game();
+  g.startExhibition({ chassis: 'balanced', difficulty: 'pro', doubles: true, humans: { 0: { chassis: 'light' }, 1: { chassis: 'heavy' } } });
+  check('le double aligne quatre robots', g.robots.length === 4, String(g.robots.length));
+  check('deux robots par camp', g.teamRobots(0).length === 2 && g.teamRobots(1).length === 2);
+  check('les deux places humaines sont occupées',
+    g.teamRobots(0).filter((r) => !r.isAI).length === 2 && g.teamRobots(1).every((r) => r.isAI));
+  check('chaque humain garde son propre deck', g.player.up !== g.partner(g.player).up);
+  g.takeCard('speed', 1);
+  check('une carte ne profite qu\u2019à son propriétaire',
+    g.cardLv(g.partner(g.player), 'speed') === 1 && g.cardLv(g.player, 'speed') === 0);
+  check('le coéquipier a bien son châssis', g.partner(g.player).chassis.key === 'heavy');
+
+  // Le serveur et le receveur se font face en diagonale.
+  const srv = g.server, rcv = g.foes(srv).find((r) => r.court === srv.court);
+  check('serveur et receveur sont en diagonale', Math.sign(srv.x) === -Math.sign(rcv.x),
+    `${srv.x.toFixed(1)} / ${rcv.x.toFixed(1)}`);
+  check('le coéquipier prend l\u2019autre carré', g.partner(srv).court === -srv.court);
+  check('la boîte de service vise le receveur', Math.sign(rcv.x) === g.serveBoxSign);
+
+  // Le terrain du double est plus large : les couloirs deviennent bons.
+  check('les couloirs sont bons en double', g.inCourt(2.9, 3) && !g.inCourt(3.2, 3));
+  const gs = new RS.Game(); gs.startExhibition({ chassis: 'balanced', difficulty: 'pro' });
+  check('les couloirs restent fautifs en simple', !gs.inCourt(2.9, 3) && gs.inCourt(2.4, 3));
+  check('la boîte de service du double s\u2019arrête à la ligne de service long',
+    (g.serveBoxSign > 0 ? g.inServiceBox(1.5, 5.5) && !g.inServiceBox(1.5, 6.4)
+                        : g.inServiceBox(-1.5, 5.5) && !g.inServiceBox(-1.5, 6.4)));
+
+  // Le camp qui marque sert ; en gardant le service on change de carré.
+  const before = g.server, beforeCourt = before.court;
+  g.endPoint(g.teamOf(before), 'POINT !'); g.nextRally();
+  check('garder le service fait changer de carré', g.server === before && g.server.court === -beforeCourt,
+    `${beforeCourt} → ${g.server.court}`);
+  g.endPoint(1 - g.teamOf(g.server), 'POINT !'); g.nextRally();
+  check('perdre le service le donne au camp adverse', g.teamOf(g.server) !== g.teamOf(before));
+
+  // Un match complet à quatre robots ne se bloque pas et les deux partenaires jouent.
+  const sim = new RS.Game();
+  sim.startExhibition({ chassis: 'balanced', difficulty: 'pro', doubles: true });
+  for (const r of sim.robots) { r.isAI = true; r.up = { cards: {}, racket: {} }; }
+  const idle = { stick: { x: 0, y: 0 }, held: {}, just: [] };
+  let f = 0;
+  while (sim.matchWinner() === -1 && f < 150000) { sim.update(1 / 60, idle); f++; }
+  check('un match de double va jusqu\u2019à son terme', sim.matchWinner() !== -1 && f < 150000,
+    `${sim.score.join('-')} en ${(f / 60).toFixed(0)} s`);
+  check('les quatre robots frappent', sim.robots.every((r) => r.stats.hits > 5),
+    sim.robots.map((r) => r.stats.hits).join('/'));
+  check('le double produit de vrais échanges', sim.longestRally >= 4, String(sim.longestRally));
+}
+
 // Effet des cartes
 {
   const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
@@ -257,7 +308,7 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   g.takeCard('speed'); g.takeCard('speed');
   check('speed card raises movement', Math.abs(g.speedOf(g.player) - base * 1.24) < 1e-6, `${base.toFixed(2)} → ${g.speedOf(g.player).toFixed(2)}`);
   g.takeCard('shuttle');
-  g.score = [0, 0]; g.endPoint(g.player, 'POINT !');
+  g.score = [0, 0]; g.endPoint(0, 'POINT !');
   check('shuttle card gives 1.25 point', g.score[0] === 1.25, String(g.score[0]));
   const aimBefore = g.spreadF(g.player, 0.3); g.takeCard('legs');
   check('legs card speeds up aiming', g.spreadF(g.player, 0.3) > aimBefore,
@@ -267,8 +318,8 @@ for (const diff of ['rookie', 'pro', 'elite']) {
     `${noise.toFixed(2)} → ${g.spreadOf(g.player, 1, true).toFixed(2)}`);
   const reach = g.reachOf(g.player); g.takeRacket('reach');
   check('racket lengthens reach', g.reachOf(g.player) > reach);
-  const [w0, w1] = g.hitWindow(); g.takeRacket('window');
-  check('racket widens hit window', g.hitWindow()[1] > w1 && g.hitWindow()[0] < w0);
+  const [w0, w1] = g.hitWindow(g.player); g.takeRacket('window');
+  check('racket widens hit window', g.hitWindow(g.player)[1] > w1 && g.hitWindow(g.player)[0] < w0);
 }
 console.log(fails ? `\n${fails} test(s) failed` : '\nall good');
 process.exit(fails ? 1 : 0);

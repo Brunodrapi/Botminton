@@ -123,8 +123,8 @@
   const ALL_UPS = RS.CARDS.concat(RS.RACKETS);
   function upDef(k) { return ALL_UPS.find((u) => u.key === k); }
   function ownedList() {
-    const r = game.run || { cards: {}, racket: {} };
-    return Object.keys(r.cards).map((k) => [k, r.cards[k]]).concat(Object.keys(r.racket).map((k) => [k, r.racket[k]]));
+    const d = game.deck ? game.deck(0) : { cards: {}, racket: {} };
+    return Object.keys(d.cards).map((k) => [k, d.cards[k]]).concat(Object.keys(d.racket).map((k) => [k, d.racket[k]]));
   }
   function updateDeck() {
     const list = ownedList();
@@ -152,7 +152,7 @@
     $('choiceSub').textContent = isCard
       ? `${ahead ? 'Tu mènes' : 'Le bot mène'} ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])} · choisis une pièce`
       : 'Choisis un modificateur de raquette';
-    const owned = isCard ? game.run.cards : game.run.racket;
+    const owned = isCard ? game.deck(0).cards : game.deck(0).racket;
     $('choiceList').innerHTML = list.map((u) => {
       const n = (owned[u.key] || 0) + 1;
       const pips = Array.from({ length: RS.UP_MAX }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('');

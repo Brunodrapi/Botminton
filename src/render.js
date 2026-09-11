@@ -214,7 +214,9 @@
       else { this.shakeX = 0; this.shakeY = 0; }
       const hcap = game.run && game.run.handicap ? game.run.handicap.key : null;
       if (hcap !== this.lastHcap) { this.lastHcap = hcap; this.courtDirty = true; }
-      if (this.courtDirty) { this.buildCourt(hcap === 'nolines'); this.courtDirty = false; }
+      // Le terrain se redessine quand les lignes changent de sens : simple et double n'ont pas la même aire de jeu.
+      if (this.lastDoubles !== !!game.doubles) { this.lastDoubles = !!game.doubles; this.courtDirty = true; }
+      if (this.courtDirty) { this.buildCourt(hcap === 'nolines', !!game.doubles); this.courtDirty = false; }
 
       if (hcap === 'dark') { this.drawBlackout(game); this.blit(); return; }
       b.drawImage(this.courtLayer, this.shakeX, this.shakeY);
@@ -226,11 +228,15 @@
         if (eyes > 0 && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing, eyes);
         this.drawShadow(s);
         this.drawSweet(game.player);
-        this.drawRobot(game.bot, game);
+        // Ordre de profondeur : le camp du fond, puis le filet, puis le camp de devant.
+        const far = [], near = [];
+        for (const r of game.robots) (r.z >= 0 ? far : near).push(r);
+        far.sort((a, c) => c.z - a.z); near.sort((a, c) => a.z - c.z);
+        for (const r of far) this.drawRobot(r, game);
         if (s.z >= 0) { this.drawTrail(s); this.drawShuttle(s); }
         b.drawImage(this.netLayer, this.shakeX, this.shakeY);
         if (s.z < 0) { this.drawTrail(s); this.drawShuttle(s); }
-        this.drawRobot(game.player, game);
+        for (const r of near) this.drawRobot(r, game);
         this.drawFx(game);
         this.drawMessage(game);
       } else {
@@ -263,7 +269,7 @@
         const swing = r.swing > 0 ? 1 - r.swing / RS.SWING_TIME : -1;
         const hy = swing >= 0 && swing < 0.6 ? 2.1 : 1.45;
         const p = this.px(r.x - r.side * 0.45, hy, r.z);
-        b.strokeStyle = r.isAI ? '#f8a0a0' : '#a0f8c0'; b.lineWidth = 1;
+        b.strokeStyle = r.side > 0 ? '#f8a0a0' : '#a0f8c0'; b.lineWidth = 1;
         b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, 3, 4, 0, 0, Math.PI * 2); b.stroke();
       }
       this.drawShadow(game.shuttle);
@@ -286,7 +292,7 @@
       ctx.beginPath(); ctx.moveTo(p.x + 0.5, p.y + 0.5); ctx.lineTo(q.x + 0.5, q.y + 0.5); ctx.stroke();
     }
 
-    buildCourt(noLines) {
+    buildCourt(noLines, doubles) {
       const c = this.courtLayer; c.width = this.bw; c.height = this.bh;
       const ctx = c.getContext('2d');
       ctx.imageSmoothingEnabled = false;
@@ -309,6 +315,9 @@
       for (let z = -L; z < L; z += 2.68) {
         if (Math.round((z + L) / 2.68) % 2) this.fillPoly(ctx, [[-W, 0, z], [W, 0, z], [W, 0, Math.min(L, z + 2.68)], [-W, 0, Math.min(L, z + 2.68)]], PAL.courtLight);
       }
+      // L'aire de jeu du simple est plus étroite : on assombrit les couloirs pour qu'on voie où le volant est bon.
+      if (!doubles) for (const sgn of [-1, 1])
+        this.fillPoly(ctx, [[sgn * Ws, 0, -L], [sgn * W, 0, -L], [sgn * W, 0, L], [sgn * Ws, 0, L]], PAL.apron);
       const ln = PAL.line;
       if (!noLines) {
       this.fillPoly(ctx, [[-W, 0, -L], [W, 0, -L], [W, 0, L], [-W, 0, L]], null, ln);
@@ -433,7 +442,7 @@
         name = game.pointWinner === r ? 'win' : 'miss';
         if (game.pointWinner === r && Math.floor(t * 4) % 2) name = 'idle';
       } else if (game.state === 'end' && game.winner != null) {
-        name = (game.winner === 0) === !r.isAI ? 'win' : 'lose';
+        name = (game.winner === 0) === (r.side < 0) ? 'win' : 'lose';
       } else if (swingU >= 0) {
         const sh = r.swingShot;
         if (sh === 'smash') name = r.jumpT > 0 ? (swingU < 0.35 ? 'jump' : swingU < 0.75 ? 'smash_hit' : 'land') : (swingU < 0.6 ? 'smash_hit' : 'land');
