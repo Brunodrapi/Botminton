@@ -136,11 +136,11 @@ for (const diff of ['rookie', 'pro', 'elite']) {
     droite: { x: 1, y: 0 }, gauche: { x: -1, y: 0 }, 'haut-droit': { x: 0.71, y: 0.71 },
   };
   // hold = temps de maintien du bouton ; sx = position du volant, pour choisir coup droit ou revers.
-  const play = (btn, dir, hold = 0, sx = 0, sy = 1.6) => {
+  const play = (btn, dir, hold = 0, sx = 0, sy = 1.6, pz = -5) => {
     const g = new RS.Game();
     g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
-    const p = g.player; p.x = 0; p.z = -5;
-    Object.assign(g.shuttle, { x: sx, y: sy, z: -4.65, vx: 0, vy: 0, vz: 0, t: 0 });
+    const p = g.player; p.x = 0; p.z = pz;
+    Object.assign(g.shuttle, { x: sx, y: sy, z: pz + 0.35, vx: 0, vy: 0, vz: 0, t: 0 });
     g.lastHitter = g.bot; g.state = 'rally'; g.time = 10;
     const st = dirs[dir];
     g.update(1 / 60, { stick: st, held: { [btn]: true }, just: [btn] });   // pression : le robot se fige et vise
@@ -202,9 +202,17 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('la diagonale garde la profondeur et vise de côté', diag.z > 4.6 && diag.x > 1.2,
     `x=${diag.x.toFixed(2)} z=${diag.z.toFixed(2)}`);
 
-  // Volant haut et cible médiane : c'est le smash.
-  const smash = play('A', 'neutre', 0, 0, 2.2);
-  check('un volant haut frappé à mi-court part en smash', smash.shot === 'smash', smash.shot);
+  // Volant haut repris près du filet et visé à mi-court : c'est le smash.
+  const smash = play('A', 'neutre', 0, 0, 2.6, -1.6);
+  check('un volant haut repris devant part en smash', smash.shot === 'smash', smash.shot);
+  check('le smash tombe bien où il est visé', Math.abs(smash.z - smash.aim.z) < 0.8,
+    `visé ${smash.aim.z.toFixed(2)} → ${smash.z.toFixed(2)}`);
+  // Depuis le fond, le filet interdit de plonger sur la cible : ce n'est plus un smash, et la mire
+  // doit rester honnête — le coup part en drive mais tombe où il est visé.
+  const tooFar = play('A', 'neutre', 0, 0, 2.2, -5);
+  check('un volant haut repris de loin ne peut pas être smashé', tooFar.shot === 'drive', tooFar.shot);
+  check('le coup rétrogradé tombe quand même où il est visé', Math.abs(tooFar.z - tooFar.aim.z) < 0.9,
+    `visé ${tooFar.aim.z.toFixed(2)} → ${tooFar.z.toFixed(2)}`);
 
   // Frapper du mauvais côté interdit le coup parfait.
   const wrong = play('A', 'neutre', 0, -0.9);

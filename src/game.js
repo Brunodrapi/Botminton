@@ -36,6 +36,7 @@
   const AIM_SPAN_X = 2.62;
   const SPREAD_BY_LEVEL = [1.15, 0.62, 0.3];   // dispersion en mètres selon la qualité du placement
   const SMASH_H = 1.85;        // au-dessus, un coup visé mi-court part en smash
+  const SMASH_TOL = 0.8;       // au-delà de cet écart à la cible, la trajectoire n'est plus un smash
   // Le coup part au relâchement du bouton : la raquette balaie et ne touche que dans sa fenêtre de contact.
   const SWING_TIME = 0.30;
   const SWING_HIT0 = 0.04;
@@ -575,21 +576,38 @@
       if (a.dive) { level = Math.min(level, 1); note = 'SAUVETAGE!'; }
       else if (!good) note = a.btn === 'B' ? 'REVERS FORCÉ' : 'COUP DROIT FORCÉ';
 
+      // La trajectoire est calculée avant d'être nommée : c'est elle qui dit si le coup est jouable.
+      const planFor = (kind, lv, sup) => {
+        const spec = this.shotSpec(r, kind, lv, { x: tx, z: tz }, sup);
+        spec.from = { x: s.x, y: s.y, z: s.z };
+        let plan = P.planShot(spec);
+        // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
+        // on recule la cible jusqu'à ce qu'il passe. Les frappes faibles gardent le droit de faire faute.
+        for (let i = 0; i < 8 && plan.net && lv > 0; i++) {
+          spec.target.z += Math.sign(spec.target.z || 1) * 0.45;
+          plan = P.planShot(spec);
+        }
+        return plan;
+      };
+      let plan = planFor(shot, level, false);
+      // Un smash pris trop bas ou trop loin du filet ne peut pas plonger sur la cible : le filet
+      // l'oblige à partir à plat et il la dépasse. Ce n'est alors pas un smash mais un drive,
+      // qui, lui, tombe là où le joueur a visé. La mire ne doit jamais mentir.
+      if (shot === 'smash' && Math.abs(plan.landing.z - tz) > SMASH_TOL) {
+        shot = 'drive'; note = note || 'TROP BAS';
+        plan = planFor(shot, level, false);
+      }
+
       const jump = shot === 'smash' && s.y > 2.5;
       const sup = shot === 'smash' && r.energy >= MAX_ENERGY;
-      if (sup) { r.energy = 0; r.stats.supers++; level = 2; note = 'SUPER SMASH!'; }
-      else if (jump) note = note || 'JUMP SMASH!';
+      if (sup) {
+        r.energy = 0; r.stats.supers++; level = 2; note = 'SUPER SMASH!';
+        // Le super smash ne troque jamais sa précision contre sa vitesse : s'il dépasse, il garde le smash placé.
+        const boom = planFor(shot, 2, true);
+        plan = Math.abs(boom.landing.z - tz) <= SMASH_TOL ? boom : planFor(shot, 2, false);
+      } else if (jump) note = note || 'JUMP SMASH!';
       if (jump) r.jumpT = JUMP_TIME;
 
-      const spec = this.shotSpec(r, shot, level, { x: tx, z: tz }, sup);
-      spec.from = { x: s.x, y: s.y, z: s.z };
-      let plan = P.planShot(spec);
-      // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
-      // on recule la cible jusqu'à ce qu'il passe. Les frappes faibles gardent le droit de faire faute.
-      for (let i = 0; i < 8 && plan.net && level > 0; i++) {
-        spec.target.z += Math.sign(spec.target.z || 1) * 0.45;
-        plan = P.planShot(spec);
-      }
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
       s.px = s.x; s.py = s.y; s.pz = s.z;
       this.lastHitter = r;
