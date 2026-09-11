@@ -45,7 +45,11 @@
   // Dispersion en mètres selon la qualité de la frappe : un coup parfait va chercher la ligne,
   // un coup mal calé part à peu près n'importe où. C'est le vrai prix du tempo.
   const SPREAD_BY_LEVEL = [1.7, 0.7, 0.22];
-  const SMASH_H = 1.85;        // au-dessus, un coup visé mi-court part en smash
+  const SMASH_H = 1.85;        // au-dessus, un drive visé au-delà de l'amorti part en smash
+  const DROP_Z = 2.6;          // en deçà, un drive devient un amorti
+  // Une croix appuyée décale déjà nettement, même sans maintien : sinon « vers le fond » tapé
+  // brièvement enverrait au milieu, ce qui n'est ni ce qu'on demande ni ce qu'on voit.
+  const AIM_FLOOR = 0.55;
   const SMASH_TOL = 0.8;       // au-delà de cet écart à la cible, la trajectoire n'est plus un smash
   const NET_BACK = 0.12;       // recul maximal appliqué au geste d'un joueur distant (compensation de latence)
   const NET_WIDEN = 0.05;      // élargissement maximal de sa fenêtre de contact, pour la gigue restante
@@ -215,7 +219,7 @@
       // La mire quitte le centre d'un coup et freine en arrivant sur la ligne : un appui bref
       // décale déjà nettement, viser le bord exact demande de tenir, et dépasser demande d'insister.
       if (u >= 1) return Math.min(SPREAD_MAX, 1 + (u - 1) * SPREAD_OUT);
-      return 1 - Math.pow(1 - u, SPREAD_EASE);
+      return AIM_FLOOR + (1 - AIM_FLOOR) * (1 - Math.pow(1 - u, SPREAD_EASE));
     }
     /** Durée de maintien qu'il faut tenir pour amener la visée à la fraction `f` du bord. Inverse de
      *  `spreadF` : le bot dit où il vise, pas combien de temps il appuierait. */
@@ -229,15 +233,16 @@
       const far = -r.side, f = this.spreadF(r, held);
       return { x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z), f };
     }
-    /** Cible d'un service : même principe, mais calée exactement sur la boîte de service adverse —
-     *  à visée pleine on touche la ligne, au-delà on est dehors. Sans cela le service court maintenu
-     *  tombait systématiquement devant la ligne de service, une faute qu'on ne pouvait pas voir venir. */
+    /** Cible d'un service. La profondeur ne dépend pas du maintien : la croix vers le bas sert court,
+     *  vers le haut sert long, tout de suite — on est à l'arrêt, c'est un choix, pas un dosage. Le
+     *  maintien ne fait glisser que le côté, vers la ligne médiane ou vers la ligne de côté. */
     serveTarget(r, ux, uz, held) {
       const far = -r.side, f = this.spreadF(r, held), b = this.serveBoxSign;
       const back = this.doubles ? COURT.longServiceDoubles : COURT.halfLength;
-      const mid = (COURT.shortService + back) / 2, span = (back - COURT.shortService) / 2;
+      const near = COURT.shortService + 0.45, deep = back - 0.45;
+      const z = uz > 0.35 ? deep : uz < -0.35 ? near : (near + deep) / 2;
       const w = (this.doubles ? COURT.halfWidthDoubles : COURT.halfWidthSingles) / 2;
-      return { x: b * w + ux * f * w, z: far * (mid + uz * f * span), f };
+      return { x: b * w + ux * f * w, z: far * z, f };
     }
     /** Dispersion attendue, en mètres : elle dépend du placement et du cordage. */
     spreadOf(r, level) {
@@ -248,11 +253,13 @@
     /** De quel côté le robot tend le bras : celui d'où vient le volant. Dans l'échange le joueur n'a
      *  pas à le choisir — il n'aurait pas le temps — c'est la position du volant qui décide. */
     strokeSide(r) { return this.shuttle.x < r.x ? -1 : 1; }
-    /** Famille de trajectoire déduite de la cible et de la hauteur du volant. */
-    familyFor(y, tz) {
+    /** Forme du coup. C'est le bouton qui la choisit, comme sur une console : B lève le volant —
+     *  un dégagement, court ou long selon la croix — et A le joue à plat, ce qui donne l'amorti
+     *  quand on vise près du filet et le smash quand le volant est assez haut pour être écrasé. */
+    familyFor(btn, y, tz) {
+      if (btn === 'B') return 'clear';
       const depth = Math.abs(tz);
-      if (depth <= 2.2) return 'drop';
-      if (depth >= 5.0) return 'clear';
+      if (depth <= DROP_Z) return 'drop';
       return y >= SMASH_H ? 'smash' : 'drive';
     }
     jumpReach(r) { return JUMP_REACH + 0.25 * this.cardLv(r, 'thruster'); }
@@ -405,8 +412,8 @@
             // Le bot vise franchement dans la boîte, pas sur la ligne : il sert court ou long,
             // un peu de côté, en gardant de la marge. Les lignes, c'est le risque du joueur.
             const uz = Math.random() < 0.45 ? -1 : 1, ux = rnd(-0.8, 0.8);
-            this.serve(srv, Math.random() < 0.5 ? 'A' : 'B',
-                       this.serveTarget(srv, ux, uz, this.heldFor(srv, rnd(0.25, 0.75))));
+            this.serve(srv, uz > 0 ? 'A' : 'B',      // long en coup droit, court en revers, comme au badminton
+                       this.serveTarget(srv, ux, uz, this.heldFor(srv, rnd(0.1, 0.7))));
           }
         }
       } else if (this.state === 'rally') {
@@ -484,7 +491,7 @@
           this.netOut.push({ k: 'r', btn: h.btn, held, ux: mx, uz: mz });
           if (p.swing <= 0) {
             p.swing = SWING_TIME; p.swingLevel = 1;
-            p.swingShot = this.familyFor(this.shuttle.y, this.rallyTarget(p, mx, mz, held).z);
+            p.swingShot = this.familyFor(h.btn, this.shuttle.y, this.rallyTarget(p, mx, mz, held).z);
           }
         } else if (serving) this.serve(p, h.btn, this.serveTarget(p, mx, mz, held));
         else if (!p.act && p.swing <= 0) this.startSwing(p, { btn: h.btn, target: this.rallyTarget(p, mx, mz, held) });
@@ -540,7 +547,7 @@
       const back = Math.max(0, Math.min(opt.back || 0, NET_BACK));
       r.act = { btn: opt.btn || 'A', target, t0: this.time - back, dive: !!opt.dive, lastD: null };
       // La famille exacte se décide au contact (elle dépend de la hauteur du volant) ; on devine pour l'animation.
-      const guess = opt.dive ? 'clear' : this.familyFor(this.shuttle.y, target.z);
+      const guess = opt.dive ? 'clear' : this.familyFor(r.act.btn, this.shuttle.y, target.z);
       r.swing = SWING_TIME - back; r.swingShot = guess; r.swingLevel = 1;
       this.events.push({ type: 'swing', robot: r, shot: guess });
     }
@@ -724,7 +731,7 @@
       const spread = this.spreadOf(r, level);
       const tx = clamp(a.target.x + rnd(-spread, spread), -3.6, 3.6);
       const tz = a.target.z + rnd(-spread, spread);
-      let shot = a.dive ? 'clear' : this.familyFor(s.y, tz);
+      let shot = a.dive ? 'clear' : this.familyFor(a.btn, s.y, tz);
       let note = null;
       if (a.dive) { level = Math.min(level, 1); note = 'SAUVETAGE!'; }
 
@@ -883,7 +890,7 @@
           if (!ai.act && ai.swing <= 0 && s.z * side > -0.3) {
             const near = Math.hypot(target.x - ai.x, tz - ai.z) < this.reachOf(ai) * 2;
             const start = (target.t - s.t) / this.shuttleRate() - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
-            if (near && start <= 0) this.startSwing(ai, { btn: target.x >= ai.x ? 'A' : 'B', target: ai.ai.target });
+            if (near && start <= 0) this.startSwing(ai, { btn: ai.ai.target.btn || 'A', target: ai.ai.target });
           }
         }
       } else {
@@ -904,21 +911,26 @@
       }
     }
 
-    /** Le bot choisit une zone plutôt qu'un type de coup : la trajectoire en découle. */
+    /** Le bot choisit une intention — écraser, amortir, dégager — puis le bouton et la zone qui
+     *  vont avec. C'est la même grammaire que le joueur : A joue à plat, B lève le volant. */
     aiAim(ai, p) {
       const d = this.diff, far = -ai.side, opps = this.foes(ai);
       // On vise à l'opposé du barycentre adverse : en double, c'est le trou entre les deux.
       const mid = opps.reduce((a, o) => a + o.x, 0) / (opps.length || 1);
       const away = mid > 0.35 ? -1 : mid < -0.35 ? 1 : (Math.random() < 0.5 ? -1 : 1);
       const h = p.y, r = Math.random();
-      let uz;
-      if (h >= 1.9 && (ai.energy >= MAX_ENERGY || r < d.aggression)) uz = rnd(-0.2, 0.2);        // smash mi-court
-      else if (h >= 1.9) uz = r < 0.45 ? rnd(-0.95, -0.65) : rnd(0.6, 0.95);                     // amorti ou dégagé
-      else if (h >= 1.15) uz = r < 0.35 ? rnd(-0.25, 0.25) : r < 0.7 ? rnd(0.6, 0.95) : rnd(-0.95, -0.6);
-      else uz = r < 0.75 ? rnd(0.65, 0.95) : rnd(-0.9, -0.6);
+      let btn = 'A', uz;
+      if (h >= 1.9 && (ai.energy >= MAX_ENERGY || r < d.aggression)) uz = rnd(-0.2, 0.3);         // smash
+      else if (h >= 1.9) { if (r < 0.45) uz = rnd(-0.95, -0.7); else { btn = 'B'; uz = rnd(0.6, 0.95); } }
+      else if (h >= 1.15) {
+        if (r < 0.35) uz = rnd(-0.25, 0.35);                                                     // drive
+        else if (r < 0.7) { btn = 'B'; uz = rnd(0.6, 0.95); }                                    // dégagé long
+        else uz = rnd(-0.95, -0.7);                                                              // amorti
+      } else if (r < 0.75) { btn = 'B'; uz = rnd(0.65, 0.95); }                                  // volant bas : on lève
+      else { btn = 'B'; uz = rnd(-0.9, -0.65); }                                                 // ou on relève court
       const f = clamp(1.05 - d.aimNoise * 0.5, 0.55, 1);      // un bon bot ose viser près des lignes
       const ux = away * rnd(0.3, 1);
-      return { x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z) };
+      return { btn, x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z) };
     }
 
     aiLevel(level) {

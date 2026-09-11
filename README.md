@@ -24,36 +24,45 @@ ombre portée, ambre pour l'action principale et crème pour le reste.
 
 ## Contrôles
 
-Une pression **fige** le robot et arme la visée, au centre du camp adverse. La croix choisit le bord vers
-lequel elle glisse : elle s'en écarte vite, puis **freine** en approchant de la ligne. Le robot **clignote
-en blanc** quand la visée atteint la ligne et **en rouge** quand elle la dépasse — relâche avant. Le coup
-part **au relâchement**, vers la cible atteinte. La raquette balaie aussitôt : mal calé, on frappe dans le vide.
+Une pression **fige** le robot et arme la visée. Le **bouton** dit la forme du coup, la **croix** où il
+tombe, et la **durée du maintien** jusqu'où la visée glisse vers la ligne — vite d'abord, puis en
+freinant. Le coup part **au relâchement**. La raquette balaie aussitôt : mal calé, on frappe dans le vide.
+
+### Dans l'échange
+
+| Entrée | Coup |
+| --- | --- |
+| **A** | **Drive** — tendu et rapide |
+| **A** + croix ▼ | **Amorti** — il retombe court, juste derrière le filet |
+| **A**, volant au-dessus de 1,85 m | **Smash** — au-dessus de 2,5 m, le robot saute |
+| **B** | **Dégagement** — le volant monte |
+| **B** + croix ▲ | Dégagement **au fond de court** |
+| **B** + croix ▼ | Lob **court**, près du filet |
+| Croix ◀ / ▶ | La visée glisse vers la **ligne de côté** ; les diagonales visent les coins |
+| Durée du maintien | Croix appuyée = déjà bien décalé, 0,63 s = sur la ligne, au-delà = **dehors** |
+
+Le côté de la raquette se choisit tout seul, selon d'où arrive le volant : on n'a pas le temps de le
+décider, et le décider ne serait pas un choix mais une punition.
+
+### Au service
+
+| Entrée | Coup |
+| --- | --- |
+| **A** | **Coup droit** — il lève davantage, 5,9 m au-dessus du filet, plus sûr |
+| **B** | **Revers** — au ras de la bande, 4,3 m, le receveur a moins de temps |
+| Croix ▼ / ▲ | **Court** ou **long**, tout de suite : la profondeur ne se dose pas |
+| Durée du maintien | Ne fait glisser que le **côté**, vers la ligne médiane ou la ligne de côté |
+
+### Partout
 
 | Entrée | Action |
 | --- | --- |
-| **A** / **B** | **Frapper** — dans l'échange les deux font la même chose, le côté suit le volant |
-| **A** / **B** au service | **Coup droit** (haut, sûr) ou **revers** (tendu, au ras de la bande) |
-| Croix ▲ / ▼ | La mire glisse vers le **fond** / vers le **filet** |
-| Croix ◀ / ▶ | La mire glisse vers la **ligne de côté** ; les diagonales visent les coins |
-| Durée du maintien | 0,2 s = déjà à mi-chemin du bord, 0,63 s = la ligne, au-delà de 0,8 s = **dehors** |
 | Tempo de la frappe | Décide de la **précision** : bien calé le volant va chercher la ligne, mal calé il part n'importe où |
 | A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
-| Service | Mêmes règles, la mire restant dans la boîte de service adverse |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
-Les consignes sont rappelées **sous les boutons** et changent après le service. Rien n'est dessiné dans
-le camp adverse : c'est ton propre robot qui te dit où en est ta visée.
-
-### La trajectoire découle de la cible
-
-Le joueur ne choisit pas un type de coup : il choisit un point de chute, et la trajectoire s'en déduit.
-
-| Cible | Coup |
-| --- | --- |
-| À moins de 2,2 m du filet | **Amorti** |
-| À plus de 5 m du filet | **Dégagé** |
-| Entre les deux, volant sous 1,85 m | **Drive** |
-| Entre les deux, volant au-dessus de 1,85 m | **Smash** (au-dessus de 2,5 m, le robot saute) |
+Les consignes sont rappelées **sous les boutons** et changent au service. Rien n'est dessiné dans le
+camp adverse : jusqu'où on peut tenir avant de sortir est une chose qui s'apprend en jouant.
 
 ## Trois modes
 
@@ -147,8 +156,8 @@ Le dernier niveau tire au sort un handicap qui vaut pour ses 15 points :
 
 - **Visée glissante** : après un temps mort de 0,08 s, la visée quitte le centre du camp adverse. Elle s'en écarte d'un coup — à 0,2 s elle a déjà fait la moitié du chemin — puis freine : il faut 0,63 s pour être exactement sur la ligne, et insister jusqu'à 0,8 s pour la franchir. Un appui bref décale donc nettement, mais aller chercher le bord se mérite.
 - **Le tempo décide de la précision** : sur une même visée, un coup parfait tombe à 16 cm de la cible et reste dans le court neuf fois sur dix ; un coup correct à 53 cm ; un coup faible à 1,29 m, et il sort trois fois sur dix. Le cordage tendu resserre cette dispersion jusqu'à − 90 %.
-- **Côté de frappe** : le point idéal est décalé de 28 cm du côté d'où arrive le volant — on frappe à côté de soi, pas à travers. Dans l'échange ce côté est choisi tout seul : il n'y a pas de mauvais bouton. Coup droit et revers ne se distinguent qu'au service, où l'on a le temps de choisir.
-- **Boîte de service** : la visée y est calée exactement — à maintien plein on vise la ligne, au-delà on est dehors. Le bot, lui, garde de la marge et ne fait pas de faute de service.
+- **Côté de frappe** : le point idéal est décalé de 28 cm du côté d'où arrive le volant — on frappe à côté de soi, pas à travers. Ce côté est choisi tout seul : il n'y a pas de mauvais bouton.
+- **Boîte de service** : la croix tranche court ou long avec 45 cm de marge sur les lignes ; le maintien ne joue que sur le côté, où viser la ligne reste un pari. Le bot garde de la marge et ne fait aucune faute de service.
 - **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et part n'importe où.
 - **Jauge SUPER** : monte sur les coups bien placés (+3 pour un parfait), les smashs (+3), les sauts (+2) et les sauvetages (+5). Pleine, le robot s'auréole et son prochain smash devient un **SUPER SMASH** foudroyant qui vide la jauge.

@@ -151,7 +151,9 @@ for (const diff of ['rookie', 'pro', 'elite']) {
     if (!act) return null;
     const aim = { x: act.target.x, z: act.target.z, f: act.target.f };
     g.hit(p, 0.3);
-    return { btn: act.btn, aim, frozen, shot: p.swingShot, level: p.swingLevel,
+    // Le sommet de la trajectoire distingue un coup levé d'un coup tendu.
+    const apex = Math.max(...g.pred.path.map((q) => q.y));
+    return { btn: act.btn, aim, frozen, shot: p.swingShot, level: p.swingLevel, apex,
              z: g.pred.landing.z, x: g.pred.landing.x };
   };
   const HOLD_LINE = 0.62;   // TAP_TIME + SPREAD_TIME, la visée atteint la ligne
@@ -161,17 +163,28 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('une pression fige le robot pour viser', !!tap && tap.frozen);
   check('A = coup droit', !!tap && tap.btn === 'A');
   check('B = revers', (play('B', 'neutre') || {}).btn === 'B');
-  check('tap sans direction vise le milieu du camp adverse',
-    !!tap && Math.abs(tap.aim.x) < 0.01 && Math.abs(tap.aim.z - 3.5) < 0.01 && tap.aim.f === 0,
-    tap && `x=${tap.aim.x.toFixed(2)} z=${tap.aim.z.toFixed(2)} f=${tap.aim.f.toFixed(2)}`);
+  check('sans direction, on vise le milieu du camp adverse',
+    !!tap && Math.abs(tap.aim.x) < 0.01 && Math.abs(tap.aim.z - 3.5) < 0.01,
+    tap && `x=${tap.aim.x.toFixed(2)} z=${tap.aim.z.toFixed(2)}`);
 
-  const deep = play('A', 'haut', HOLD_LINE);
-  const short = play('A', 'bas', HOLD_LINE);
-  check('maintien vers le haut = dégagé en fond de court', deep.shot === 'clear' && deep.z > 5.8,
-    `${deep.shot} z=${deep.z.toFixed(2)}`);
-  check('maintien vers le bas = amorti près du filet', short.shot === 'drop' && short.z < 2.2,
+  // B lève le volant : dégagement long avec la croix vers le haut, lob court avec la croix vers le bas.
+  const lobLong = play('B', 'haut', HOLD_LINE), lobShort = play('B', 'bas', HOLD_LINE);
+  check('B + haut = dégagement au fond de court', lobLong.shot === 'clear' && lobLong.z > 5.8,
+    `${lobLong.shot} z=${lobLong.z.toFixed(2)}`);
+  check('B + bas = lob court près du filet', lobShort.shot === 'clear' && lobShort.z < 2.4,
+    `${lobShort.shot} z=${lobShort.z.toFixed(2)}`);
+  check('le dégagement lève vraiment le volant', lobLong.apex > 4,
+    `sommet à ${lobLong.apex.toFixed(1)} m`);
+
+  // A joue à plat : amorti près du filet, drive au-delà.
+  const deep = play('A', 'haut', HOLD_LINE), short = play('A', 'bas', HOLD_LINE);
+  check('A + bas = amorti près du filet', short.shot === 'drop' && short.z < 2.4,
     `${short.shot} z=${short.z.toFixed(2)}`);
-  check('sans maintien le coup reste médian', tap.shot === 'drive' && tap.z > 2.5 && tap.z < 4.6,
+  check('A + haut = drive au fond', deep.shot === 'drive' && deep.z > 5.8,
+    `${deep.shot} z=${deep.z.toFixed(2)}`);
+  check('le drive reste tendu', deep.apex < lobLong.apex - 1.5,
+    `${deep.apex.toFixed(1)} m contre ${lobLong.apex.toFixed(1)} m`);
+  check('sans direction le coup reste médian', tap.shot === 'drive' && tap.z > 2.5 && tap.z < 4.6,
     `${tap.shot} z=${tap.z.toFixed(2)}`);
   check('les trois profondeurs sont bien étagées', deep.z > tap.z + 1 && tap.z > short.z + 1,
     `${short.z.toFixed(2)} < ${tap.z.toFixed(2)} < ${deep.z.toFixed(2)}`);
@@ -183,8 +196,10 @@ for (const diff of ['rookie', 'pro', 'elite']) {
     `${tap.aim.z.toFixed(2)} < ${halfHold.aim.z.toFixed(2)} < ${deep.aim.z.toFixed(2)}`);
   const rightLine = play('A', 'droite', HOLD_LINE);
   const rightTap = play('A', 'droite', 0.15);
-  check('la latéralité croît aussi avec le maintien', rightLine.aim.x > rightTap.aim.x + 1.2,
+  check('la latéralité croît aussi avec le maintien', rightLine.aim.x > rightTap.aim.x + 0.5,
     `${rightTap.aim.x.toFixed(2)} → ${rightLine.aim.x.toFixed(2)}`);
+  check('une croix appuyée décale déjà sans maintien', play('A', 'droite', 0).aim.x > 1.2,
+    play('A', 'droite', 0).aim.x.toFixed(2));
   check('le maintien complet amène la visée sur la ligne de côté',
     Math.abs(rightLine.aim.x - 2.59) < 0.35, rightLine.aim.x.toFixed(2));
   check('la croix gauche vise l\u2019autre bord', play('B', 'gauche', HOLD_LINE).aim.x < -2.2);
@@ -242,10 +257,15 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   g.score = [0, 0]; g.server = g.player; g.setupServe();
   const p = g.player, b = g.serveBoxSign, plein = 0.08 + 0.55;
   const t = (ux, uz, held) => g.serveTarget(p, ux, uz, held === undefined ? plein : held);
-  check('visée pleine vers le filet : la ligne de service court',
-    Math.abs(Math.abs(t(0, -1).z) - P.COURT.shortService) < 0.02, t(0, -1).z.toFixed(2));
-  check('visée pleine vers le fond : la ligne de fond',
-    Math.abs(Math.abs(t(0, 1).z) - P.COURT.halfLength) < 0.02, t(0, 1).z.toFixed(2));
+  // La croix tranche court ou long tout de suite : le maintien ne joue que sur le côté.
+  for (const held of [0, 0.2, plein]) {
+    check(`croix vers le bas, maintien ${held.toFixed(2)} s : service court`,
+      Math.abs(t(0, -1, held).z) < P.COURT.shortService + 0.6, t(0, -1, held).z.toFixed(2));
+    check(`croix vers le haut, maintien ${held.toFixed(2)} s : service long`,
+      Math.abs(t(0, 1, held).z) > P.COURT.halfLength - 0.6, t(0, 1, held).z.toFixed(2));
+  }
+  check('court et long restent tous deux dans la boîte',
+    g.inServiceBox(t(0, -1, plein).x, t(0, -1, plein).z) && g.inServiceBox(t(0, 1, plein).x, t(0, 1, plein).z));
   check('visée pleine vers l\u2019extérieur : la ligne de côté',
     Math.abs(Math.abs(t(b, 0).x) - P.COURT.halfWidthSingles) < 0.02, t(b, 0).x.toFixed(2));
   check('visée pleine vers l\u2019intérieur : la ligne médiane', Math.abs(t(-b, 0).x) < 0.02, t(-b, 0).x.toFixed(2));
@@ -255,8 +275,10 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   const gd = new RS.Game();
   gd.startExhibition({ chassis: 'balanced', difficulty: 'rookie', doubles: true });
   gd.score = [0, 0]; gd.server = gd.player; gd.setupServe();
-  check('en double la visée pleine touche la ligne de service long',
-    Math.abs(Math.abs(gd.serveTarget(gd.player, 0, 1, plein).z) - P.COURT.longServiceDoubles) < 0.02);
+  check('en double le service long s\u2019arrête à la ligne de service long',
+    Math.abs(gd.serveTarget(gd.player, 0, 1, plein).z) < P.COURT.longServiceDoubles
+      && Math.abs(gd.serveTarget(gd.player, 0, 1, plein).z) > P.COURT.longServiceDoubles - 0.6,
+    gd.serveTarget(gd.player, 0, 1, plein).z.toFixed(2));
 
   // Le bouton choisit le geste : le revers passe plus bas et arrive plus vite.
   const hauteur = (btn) => {
