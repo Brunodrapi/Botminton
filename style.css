@@ -173,6 +173,8 @@ ul.help li { margin-bottom: 6px; }
 .choice .lv { font-size: 6px; color: var(--ink-soft); }
 .choice .lv i { display: inline-block; width: 6px; height: 6px; margin-left: 2px; background: var(--ink-soft); opacity: 0.3; }
 .choice .lv i.on { opacity: 1; background: #2a7a3a; }
+.card.dead { opacity: 0.4; cursor: default; box-shadow: 2px 2px 0 var(--ink); }
+.note-big { text-align: left !important; font-size: 7px !important; line-height: 2 !important; margin: 10px 0 !important; }
 .field {
   width: 100%; margin-top: 8px; padding: 10px; font-family: inherit; font-size: 10px; text-transform: uppercase;
   border: 3px solid var(--ink); background: #fff8e8; color: var(--ink); box-shadow: inset 2px 2px 0 rgba(0,0,0,0.1);

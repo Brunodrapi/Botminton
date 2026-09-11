@@ -137,18 +137,20 @@
       return c;
     }
 
-    /** Copie blanche de l'atlas : sert à faire briller un robot (charge prête, jauge pleine). */
-    silhouette(sheet) {
+    /** Copie unie de l'atlas : sert à faire briller un robot (jauge pleine, visée sur la ligne). */
+    silhouette(sheet, rgb) {
       const a = this.atlases[sheet];
       if (!a) return null;
-      if (a.glow) return a.glow;
+      const key = rgb ? 'glow' + rgb.join('') : 'glow';
+      if (a[key]) return a[key];
+      const col = rgb || [255, 255, 245];
       const c = document.createElement('canvas'); c.width = a.img.width; c.height = a.img.height;
       const ctx = c.getContext('2d');
       ctx.drawImage(a.img, 0, 0);
       const id = ctx.getImageData(0, 0, c.width, c.height), d = id.data;
-      for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 128) { d[i] = 255; d[i + 1] = 255; d[i + 2] = 245; } }
+      for (let i = 0; i < d.length; i += 4) { if (d[i + 3] > 128) { d[i] = col[0]; d[i + 1] = col[1]; d[i + 2] = col[2]; } }
       ctx.putImageData(id, 0, 0);
-      a.glow = c;
+      a[key] = c;
       return c;
     }
 
@@ -222,8 +224,6 @@
       b.drawImage(this.courtLayer, this.shakeX, this.shakeY);
       if (game.state !== 'menu') {
         const s = game.shuttle;
-        const aim = game.currentAim ? game.currentAim() : null;
-        if (aim) this.drawAim(aim);
         const eyes = game.eyesLv ? game.eyesLv() : 0;
         if (eyes > 0 && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing, eyes);
         this.drawShadow(s);
@@ -357,21 +357,6 @@
       }
     }
 
-    /** Mire de visée : elle glisse du centre vers le bord tant que le bouton est maintenu, et rougit hors du terrain. */
-    drawAim(aim) {
-      const b = this.bctx;
-      const p = this.px(aim.x, 0, aim.z);
-      const rx = Math.max(3, aim.spread * this.KX), ry = Math.max(2, aim.spread * this.KZ);
-      const col = aim.out ? '#f85858' : '#68f878';
-      b.save();
-      b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, rx, ry, 0, 0, Math.PI * 2);
-      b.globalAlpha = 0.22; b.fillStyle = col; b.fill();
-      b.globalAlpha = 0.9; b.strokeStyle = col; b.lineWidth = 1; b.stroke();
-      b.fillStyle = col;
-      b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 1, 1, 3);
-      b.restore();
-    }
-
     /** Zone d'arrivée du volant (carte Optique prédictive) : large et floue au premier niveau, précise au troisième. */
     drawLanding(l, lv) {
       const b = this.bctx;
@@ -500,7 +485,9 @@
       const src = this.tinted(sheet, r.tint ? r.color : null);
       const sy = p.y - jump - bob;
       const aim = game.aimF(r);
-      // Jauge SUPER pleine : aura discrète. Mire arrivée sur la ligne : le robot clignote, il faut relâcher.
+      // La visée ne se dessine plus dans le camp adverse : c'est le robot qui prévient. Il clignote
+      // en blanc quand la visée atteint la ligne, en rouge quand elle l'a franchie — relâche avant.
+      const aimOut = aim > 1 && r === game.player && game.currentAim && (game.currentAim() || {}).out;
       if (r.energy >= RS.MAX_ENERGY) {
         const g = this.silhouette(sheet);
         b.save(); b.globalAlpha = 0.18 + 0.14 * Math.sin(this.time * 7);
@@ -508,9 +495,9 @@
         b.restore();
       }
       this.drawSprite(sheet, name, p.x, sy, flip, src);
-      if (aim >= 1 && Math.floor(this.time * 12) % 2) {
-        const g = this.silhouette(sheet);
-        b.save(); b.globalAlpha = 0.75;
+      if (aim >= 1 && Math.floor(this.time * (aimOut ? 16 : 12)) % 2) {
+        const g = this.silhouette(sheet, aimOut ? [248, 88, 88] : null);
+        b.save(); b.globalAlpha = aimOut ? 0.9 : 0.75;
         this.drawSprite(sheet, name, p.x, sy, flip, g);
         b.restore();
       }

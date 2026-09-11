@@ -102,16 +102,20 @@
     exhib: { name: 'EXHIBITION', desc: ['Un match', 'en 15 points'] },
     run: { name: 'ROGUE LITE', desc: ['4 niveaux', 'avec les cartes'] },
   };
+  // Le rogue lite se joue contre la machine : en solo, ou à deux du même côté. Un duel reste un match libre.
+  const RUN_MODES = ['coop'];
   const netSettings = { mode: 'duel', game: 'exhib' };
 
-  function pickRow(el, defs, current, onPick) {
+  function pickRow(el, defs, current, onPick, off) {
     el.innerHTML = '';
     for (const k of Object.keys(defs)) {
       const d = defs[k];
       const b = document.createElement('button');
-      b.className = 'card' + (current === k ? ' selected' : '');
-      b.innerHTML = `<div class="title">${d.name}</div><div class="desc">${d.desc.join('<br>')}</div>`;
-      b.addEventListener('click', () => { sfx.unlock(); onPick(k); });
+      const dead = off && off.indexOf(k) >= 0;
+      b.className = 'card' + (current === k ? ' selected' : '') + (dead ? ' dead' : '');
+      b.disabled = !!dead;
+      b.innerHTML = `<div class="title">${d.name}</div><div class="desc">${(dead ? d.off || d.desc : d.desc).join('<br>')}</div>`;
+      if (!dead) b.addEventListener('click', () => { sfx.unlock(); onPick(k); });
       el.appendChild(b);
     }
   }
@@ -119,16 +123,23 @@
   function renderOnline() {
     if ($('online').classList.contains('hidden')) return;
     const st = $('onlineState');
-    const off = !net.room;
-    if (off) st.textContent = net.error
-      ? 'Indisponible ici — il faut ouvrir la page sur claude.ai, et être plusieurs à l\u2019avoir ouverte'
-      : 'Connexion…';
-    else if (!net.connected()) st.textContent = 'Reconnexion…';
-    else st.textContent = `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`;
-    $('netCreate').disabled = off;
-    $('netCreate').style.opacity = off ? 0.45 : 1;
+    const dead = !net.room && !!net.error;       // la capacité n'existe pas ici : inutile de faire semblant
+    const waiting = !net.room && !net.error;
+    // Hors de claude.ai, on explique au lieu de laisser un bouton grisé sans raison.
+    $('netOffline').classList.toggle('hidden', !dead);
+    for (const id of ['netMode', 'netGame', 'netName', 'netTables', 'netCreate']) $(id).classList.toggle('hidden', dead);
+    for (const h of $('online').querySelectorAll('h2')) h.classList.toggle('hidden', dead);
+    if (dead) { st.textContent = 'Indisponible sur cette page'; return; }
+    st.textContent = waiting ? 'Connexion…'
+      : !net.connected() ? 'Reconnexion…'
+      : `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`;
+    $('netCreate').disabled = waiting;
+    $('netCreate').style.opacity = waiting ? 0.45 : 1;
+    // Le rogue lite demande un camp adverse tenu par la machine : il n'existe donc pas en duel.
+    if (RUN_MODES.indexOf(netSettings.mode) < 0) netSettings.game = 'exhib';
     pickRow($('netMode'), MODE_DESC, netSettings.mode, (k) => { netSettings.mode = k; renderOnline(); });
-    pickRow($('netGame'), GAME_DESC, netSettings.game, (k) => { netSettings.game = k; renderOnline(); });
+    pickRow($('netGame'), GAME_DESC, netSettings.game, (k) => { netSettings.game = k; renderOnline(); },
+            RUN_MODES.indexOf(netSettings.mode) < 0 ? ['run'] : null);
     const tables = net.room ? net.tables().filter((t) => !t.players.some((p) => p.me)) : [];
     $('netTables').innerHTML = tables.length ? tables.map((t) => {
       const full = t.players.length >= 2 || t.playing;
@@ -195,7 +206,7 @@
     net.begin();
     handicapShown = null;
     const opts = { chassis: settings.chassis, assist: settings.assist, doubles: seat.doubles, humans: seat.humans };
-    if (net.game === 'run') { game.startRun(opts); game.run.versus = net.mode === 'duel'; }
+    if (net.game === 'run') game.startRun(opts);
     else { opts.difficulty = net.mode === 'duel' ? 'rookie' : settings.difficulty; game.startExhibition(opts); }
     beginRound();
   }

@@ -36,11 +36,15 @@
   // la cible vers le bord choisi à la croix, jusqu'à sortir du terrain.
   const TAP_TIME = 0.08;
   const SPREAD_TIME = 0.55;    // maintien nécessaire pour amener la visée sur la ligne
+  const SPREAD_EASE = 2.4;     // courbe de la visée : d'autant plus freinée près de la ligne
+  const SPREAD_OUT = 0.28;     // vitesse résiduelle au-delà de la ligne : sortir demande d'insister
   const SPREAD_MAX = 1.28;     // au-delà de 1, on vise dehors
   const AIM_DEPTH = 3.5;       // profondeur du centre du camp adverse
   const AIM_SPAN_Z = 3.05;
   const AIM_SPAN_X = 2.62;
-  const SPREAD_BY_LEVEL = [1.15, 0.62, 0.3];   // dispersion en mètres selon la qualité du placement
+  // Dispersion en mètres selon la qualité de la frappe : un coup parfait va chercher la ligne,
+  // un coup mal calé part à peu près n'importe où. C'est le vrai prix du tempo.
+  const SPREAD_BY_LEVEL = [1.7, 0.7, 0.22];
   const SMASH_H = 1.85;        // au-dessus, un coup visé mi-court part en smash
   const SMASH_TOL = 0.8;       // au-delà de cet écart à la cible, la trajectoire n'est plus un smash
   const NET_BACK = 0.12;       // recul maximal appliqué au geste d'un joueur distant (compensation de latence)
@@ -207,7 +211,11 @@
     /** Fraction de la visée déjà glissée vers le bord : 0 au centre, 1 sur la ligne, au-delà dehors. */
     spreadF(r, held) {
       const t = SPREAD_TIME * (1 - 0.18 * this.cardLv(r, 'legs'));
-      return clamp((held - TAP_TIME) / t, 0, SPREAD_MAX);
+      const u = Math.max(0, (held - TAP_TIME) / t);
+      // La mire quitte le centre d'un coup et freine en arrivant sur la ligne : un appui bref
+      // décale déjà nettement, viser le bord exact demande de tenir, et dépasser demande d'insister.
+      if (u >= 1) return Math.min(SPREAD_MAX, 1 + (u - 1) * SPREAD_OUT);
+      return 1 - Math.pow(1 - u, SPREAD_EASE);
     }
     /** Cible d'un coup d'échange : centre du camp adverse, décalée vers le bord choisi. */
     rallyTarget(r, ux, uz, held) {
@@ -675,9 +683,11 @@
     hit(r, d) {
       const s = this.shuttle;
       const a = r.act; r.act = null; r.hold = null;
-      // Un joueur distant place son robot avec un aller simple de retard : on lui élargit d'autant
-      // la zone de qualité, sinon la latence lui coûterait la précision qu'il a réellement eue.
-      const wide = 0.09 * this.racketLv(r, 'window') + (r.netLag ? Math.min(0.3, r.netLag * 2.2) : 0);
+      // Un joueur distant place son robot avec un aller simple de retard : à sa vitesse de course,
+      // cela fait exactement `vitesse × latence` mètres de retard sur le point qu'il visait. On lui
+      // élargit la zone de qualité d'autant, sinon le réseau lui coûterait le tempo qu'il a eu.
+      const late = r.netLag ? Math.min(0.55, this.speedOf(r) * r.netLag * 0.8) : 0;
+      const wide = 0.09 * this.racketLv(r, 'window') + late;
       const place = d <= 0.55 + wide ? 2 : d <= 1.0 + wide ? 1 : 0;
       const good = a.dive || this.goodStroke(r, a.btn);
       let level = good ? place : Math.min(place, 1);     // frapper du mauvais côté interdit le coup parfait
@@ -1095,8 +1105,6 @@
 
     /** −1 : on continue. 0 : palier franchi (carte). 1 : le bot a fait 15, la run s'arrête. */
     matchWinner() {
-      // En duel, aucun camp n'arrête la run : le niveau change de main et on repart.
-      if (this.run.versus) return Math.max(this.score[0], this.score[1]) >= this.nextStep() ? 0 : -1;
       if (this.score[1] >= LEVEL_TARGET) return 1;
       // Le palier tombe dès que l'un des deux l'atteint : une carte de rattrapage si le bot mène.
       if (Math.max(this.score[0], this.score[1]) >= this.nextStep()) return 0;
@@ -1114,11 +1122,6 @@
         const lastStep = this.run.stage >= CARD_STEPS.length - 1;
         const lastLevel = this.run.level >= DIFF_ORDER.length - 1;
         this.pendingRacket = lastStep;
-        // Duel : le niveau se compte au vainqueur, et la manche continue tant qu'il reste des niveaux.
-        if (this.run.versus && lastStep) {
-          this.run.wins = this.run.wins || [0, 0];
-          this.run.wins[this.score[0] > this.score[1] ? 0 : 1]++;
-        }
         this.phase = (lastStep && lastLevel) ? 'won' : 'cards';
       }
       this.events.push({ type: 'end', winner: w, phase: this.phase });
@@ -1133,5 +1136,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SHOTS, REASONS, SWEET, STROKE_OFF, TAP_TIME, SPREAD_TIME, SPREAD_MAX, SMASH_H, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SHOTS, REASONS, SWEET, STROKE_OFF, TAP_TIME, SPREAD_TIME, SPREAD_MAX, SPREAD_BY_LEVEL, SMASH_H, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

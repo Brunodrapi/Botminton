@@ -13,10 +13,10 @@ Si le bot atteint 15 avant toi, la run s'arrête. Le boss impose en plus un prot
 
 ## Contrôles
 
-Une pression **fige** le robot et fait apparaître la **mire** au centre du camp adverse. La croix choisit
-le bord vers lequel elle glisse, et plus on maintient, plus elle s'en approche : au bout de 0,63 s elle est
-sur la ligne, au-delà elle sort (elle rougit). Le coup part **au relâchement**, vers la cible atteinte.
-La raquette balaie aussitôt : mal calé, on frappe dans le vide.
+Une pression **fige** le robot et arme la visée, au centre du camp adverse. La croix choisit le bord vers
+lequel elle glisse : elle s'en écarte vite, puis **freine** en approchant de la ligne. Le robot **clignote
+en blanc** quand la visée atteint la ligne et **en rouge** quand elle la dépasse — relâche avant. Le coup
+part **au relâchement**, vers la cible atteinte. La raquette balaie aussitôt : mal calé, on frappe dans le vide.
 
 | Entrée | Action |
 | --- | --- |
@@ -24,13 +24,15 @@ La raquette balaie aussitôt : mal calé, on frappe dans le vide.
 | **B** | **Revers** — le volant se prend à gauche du robot |
 | Croix ▲ / ▼ | La mire glisse vers le **fond** / vers le **filet** |
 | Croix ◀ / ▶ | La mire glisse vers la **ligne de côté** ; les diagonales visent les coins |
-| Durée du maintien | 0 s = centre du camp, 0,63 s = la ligne, plus longtemps = **dehors** |
+| Durée du maintien | 0,2 s = déjà à mi-chemin du bord, 0,63 s = la ligne, au-delà de 0,8 s = **dehors** |
+| Tempo de la frappe | Décide de la **précision** : bien calé le volant va chercher la ligne, mal calé il part n'importe où |
 | Mauvais côté de raquette | Coup parfait interdit, dispersion × 1,5, mention *COUP DROIT FORCÉ* / *REVERS FORCÉ* |
 | A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
 | Service | Mêmes règles, la mire restant dans la boîte de service adverse |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
 
-Les consignes sont rappelées **sous les boutons** et changent après le service.
+Les consignes sont rappelées **sous les boutons** et changent après le service. Rien n'est dessiné dans
+le camp adverse : c'est ton propre robot qui te dit où en est ta visée.
 
 ### La trajectoire découle de la cible
 
@@ -47,19 +49,21 @@ Le joueur ne choisit pas un type de coup : il choisit un point de chute, et la t
 
 - **Rogue lite** : choix du châssis, puis les 4 adversaires à la suite, avec les cartes et le protocole du boss.
 - **Exhibition** : choix du châssis, puis de l'adversaire, pour un match libre en 15 points sans carte ni protocole.
-- **En ligne** : duel 1v1 ou coop 2v2, en exhibition comme en rogue lite.
+- **En ligne** : duel 1v1 en match libre, ou coop 2v2 en match libre comme en rogue lite.
 
 ### En ligne
 
-| Formule | Terrain | Qui joue |
-| --- | --- | --- |
-| **Duel 1v1** | Simple | Deux humains, un par camp |
-| **Coop 2v2** | Double | Deux humains d'un côté, deux machines de l'autre |
+| Formule | Terrain | Qui joue | Épreuves |
+| --- | --- | --- | --- |
+| **Duel 1v1** | Simple | Deux humains, un par camp | Exhibition |
+| **Coop 2v2** | Double | Deux humains d'un côté, deux machines de l'autre | Exhibition · rogue lite |
+
+Le rogue lite se joue contre la machine : en solo, ou à deux du même côté. Un duel entre deux humains
+n'a pas de camp adverse à faire progresser, c'est donc un match libre.
 
 On crée une table ou on en rejoint une dans la liste ; chacun choisit son châssis, se déclare prêt, et
-le match part quand les deux le sont. **Chaque joueur a son propre deck** : à chaque palier vous
-choisissez chacun votre carte et la manche repart une fois que les deux ont choisi. En duel rogue
-lite, le niveau se gagne à 15 points et la run revient à qui en remporte le plus.
+le match part quand les deux le sont. En coop rogue lite, **chaque joueur a son propre deck** : à
+chaque palier vous choisissez chacun votre carte et la manche repart une fois que les deux ont choisi.
 
 Le jeu en ligne passe par la capacité `room` des Artifacts claude.ai : il réunit les personnes de la
 même organisation qui ont **la page ouverte au même moment**, et rien n'est conservé — fermer la page
@@ -112,8 +116,8 @@ Le dernier niveau tire au sort un handicap qui vaut pour ses 15 points :
 
 ## Systèmes de jeu
 
-- **Mire glissante** : après un temps mort de 0,08 s, la visée quitte le centre du camp adverse et met 0,55 s à rejoindre la ligne. Viser les bords coûte donc du temps de préparation, et trop attendre envoie le volant dehors.
-- **Imprécision de base** : même bien placée, la frappe est dispersée (± 0,30 m sur un coup parfait, ± 0,62 m sur un coup correct, ± 1,15 m sur un coup faible). Le cordage tendu réduit cette dispersion jusqu'à − 90 %.
+- **Visée glissante** : après un temps mort de 0,08 s, la visée quitte le centre du camp adverse. Elle s'en écarte d'un coup — à 0,2 s elle a déjà fait la moitié du chemin — puis freine : il faut 0,63 s pour être exactement sur la ligne, et insister jusqu'à 0,8 s pour la franchir. Un appui bref décale donc nettement, mais aller chercher le bord se mérite.
+- **Le tempo décide de la précision** : sur une même visée, un coup parfait tombe à 16 cm de la cible et reste dans le court neuf fois sur dix ; un coup correct à 53 cm ; un coup faible à 1,29 m, et il sort trois fois sur dix. Le cordage tendu resserre cette dispersion jusqu'à − 90 %.
 - **Coup droit / revers** : le point idéal est décalé de 28 cm du côté de la raquette. Frapper du mauvais côté plafonne la qualité à OK et élargit la dispersion de moitié.
 - **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et part n'importe où.
