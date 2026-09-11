@@ -209,6 +209,17 @@
     $('lobbyCode').textContent = net.table;
     $('lobbySub').textContent = formulaOf(net.mode).name
       + (net.isHost() ? (net.canBrowse() ? ' · tu héberges' : ' · donne ce code à l\u2019autre joueur') : '');
+    // Seul dans un salon, rien ne disait si quelqu'un pouvait seulement arriver : sur claude.ai il
+    // faut que l'autre ait la page ouverte ET soit connecté au même compte, ce qui ne se devine pas.
+    const alone = members.length < seats;
+    const here = net.livePeers().filter((p) => p.kind === 'viewer').length;
+    $('lobbyWho').innerHTML = !alone ? ''
+      : net.canBrowse()
+        ? (here > 1
+            ? `${here} personnes ont cette page ouverte — l\u2019autre doit rejoindre la table ${net.table}.`
+            : `Tu es seul sur cette page. Ici, seul un appareil <b>connecté à ton compte</b> peut te
+               rejoindre — sinon, ouvrez tous les deux <b>${PUBLIC_URL}</b>.`)
+        : `Donne le code <b>${net.table}</b> à l\u2019autre joueur : il le saisit dans EN LIGNE.`;
     const rows = [];
     for (let i = 0; i < seats; i++) {
       const m = members[i];
