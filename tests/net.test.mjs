@@ -139,8 +139,11 @@ const idle = () => ({ stick: { x: 0, y: 0 }, held: {}, just: [] });
   for (const m of toGuest) if (m.at >= 9000) guest.applySnapshot(m.s, MAP, true, true, LAG / 60);
   check('le duel en ligne produit de vrais échanges', host.longestRally >= 3 && host.player.stats.hits > 60,
     `${host.player.stats.hits} frappes · échange max ${host.longestRally}`);
-  check('l\u2019invité voit le même score', guest.score[0] === host.score[0] && guest.score[1] === host.score[1],
-    `${guest.score.join('-')} vs ${host.score.join('-')}`);
+  // L'invité lit le score depuis son camp : il est donc le miroir de celui de l'hôte, pas sa copie.
+  // Cette vérification affirmait l'inverse — et ne passait que tant qu'aucun point ne tombait.
+  check('l\u2019invité voit le score depuis son camp',
+    guest.score[0] === host.score[1] && guest.score[1] === host.score[0],
+    `${guest.score.join('-')} chez l\u2019invité pour ${host.score.join('-')} chez l\u2019hôte`);
   // Le pic est irréductible : juste après une frappe, l'invité prolonge encore l'ancienne trajectoire
   // le temps d'un aller simple. Ce qui compte est que l'écart soit bref, donc on mesure la queue.
   errs.sort((a, b) => a - b);
