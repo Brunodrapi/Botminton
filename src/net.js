@@ -82,7 +82,16 @@
     push(extra) {
       if (!this.room) return;
       const p = Object.assign(this.lobbyPresence(), extra || {});
-      this.room.presence(p).catch(() => {});
+      // La plateforme ne demande son accord au spectateur qu'au premier appel : un refus arrive ici,
+      // pas au `use()`. On le traite comme une absence de salon plutôt que de l'avaler en silence.
+      this.room.presence(p).catch((e) => {
+        const code = e && e.code;
+        if (code === 'not_granted' || code === 'revoked' || code === 'capability_disabled'
+            || code === 'capability_removed' || code === 'not_permitted') {
+          this.error = code; this.room = null; this.state = 'off'; this.table = null;
+          this.onChange();
+        }
+      });
     }
 
     /** Pairs valides d'une table, triés par identifiant : l'ordre décide des places et de l'hôte.

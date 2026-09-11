@@ -164,7 +164,9 @@ const read = (p) => p.evaluate(() => {
            longest: g.longestRally, presses: window.__log.presses, doubles: g.doubles,
            stage: g.run.stage, level: g.run.level, wins: g.run.wins || null, roundSeq: g.roundSeq || 0,
            deck: Object.keys(g.deck(0).cards).length + '+' + Object.keys(g.deck(0).racket).length,
-           choices: (window.__log.seen || {}).choice || 0 };
+           choices: (window.__log.seen || {}).choice || 0,
+           pos: g.robots.map((r) => `${r.side > 0 ? 'haut' : 'bas '}(${r.x.toFixed(1)},${r.z.toFixed(1)})`),
+           me: `${g.player.x.toFixed(1)},${g.player.z.toFixed(1)}`, shuttle: `${g.shuttle.x.toFixed(1)},${g.shuttle.z.toFixed(1)}` };
 });
 const [ra, rb] = await Promise.all([read(A), read(B)]);
 console.log('A :', JSON.stringify(ra));
