@@ -43,8 +43,8 @@
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
   $('assistToggle').checked = !!settings.assist;
   $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
-  const panels = ['splash', 'menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis', 'online', 'lobby'];
-  const LOBBY = ['splash', 'menu', 'help', 'chassis', 'opponents', 'online', 'lobby'];
+  const panels = ['splash', 'menu', 'solo', 'options', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis', 'online', 'lobby'];
+  const LOBBY = ['splash', 'menu', 'solo', 'options', 'help', 'chassis', 'opponents', 'online', 'lobby'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -346,7 +346,7 @@
   }
 
   $('onlineBtn').addEventListener('click', () => { sfx.unlock(); showOnline(); });
-  $('netBack').addEventListener('click', () => showPanel('menu'));
+  $('netBack').addEventListener('click', () => showPanel('menu'));   // le salon revient à l'accueil
   $('netCreate').addEventListener('click', () => {
     if (!net.room) return;
     const f = formulaOf(netSettings.formula);
@@ -365,14 +365,18 @@
   });
   $('lobbyReady').addEventListener('click', () => { sfx.unlock(); net.setReady(!net.ready); renderLobby(); });
   $('lobbyLeave').addEventListener('click', () => { sfx.unlock(); quitNet(); });
+  $('soloBtn').addEventListener('click', () => { sfx.unlock(); showPanel('solo'); });
+  $('soloBack').addEventListener('click', () => showPanel('menu'));
+  $('optionsBtn').addEventListener('click', () => { sfx.unlock(); showPanel('options'); });
+  $('optionsBack').addEventListener('click', () => showPanel('menu'));
   $('playBtn').addEventListener('click', () => showChassis('run'));
   $('chassisGo').addEventListener('click', () => { sfx.unlock(); if (pendingMode === 'run') startRun(); else showOpponents(); });
-  $('chassisBack').addEventListener('click', () => showPanel('menu'));
+  $('chassisBack').addEventListener('click', () => showPanel('solo'));
   $('malusBtn').addEventListener('click', () => { game.resume(); showPanel(null); });
   $('exhibBtn').addEventListener('click', () => showChassis('exhib'));
   $('oppBack').addEventListener('click', () => showChassis('exhib'));
   $('helpBtn').addEventListener('click', () => showPanel('help'));
-  $('helpBack').addEventListener('click', () => showPanel('menu'));
+  $('helpBack').addEventListener('click', () => showPanel('options'));
   $('pauseBtn').addEventListener('click', () => {
     if (game.state === 'paused') return;
     // En ligne, la partie ne s'arrête pas pour les autres : on le dit plutôt que de mentir.
@@ -393,7 +397,7 @@
       if (game.state === 'paused') { game.resume(); showPanel(null); }
       else if (game.state !== 'menu' && game.state !== 'end') $('pauseBtn').click();
     }
-    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) showChassis('run');
+    if (e.key === 'Enter' && !$('menu').classList.contains('hidden')) showPanel('solo');
   });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && net.state !== 'playing' && game.state !== 'menu' && game.state !== 'end') { game.pause(); showPanel('pause'); }
@@ -550,8 +554,10 @@
 
   /* ---------------------------------------------------------------- accueil */
   // L'affiche, puis le calque qui recouvre « PRESS START » par intermittence.
-  $('splash').querySelector('.art').src = window.TITLE_ART || '';
-  $('splash').querySelector('.band').src = window.TITLE_BAND || '';
+  for (const el of document.querySelectorAll('.splash-art')) {
+    el.querySelector('.art').src = window.TITLE_ART || '';
+    el.querySelector('.band').src = window.TITLE_BAND || '';
+  }
   const leaveSplash = () => {
     if ($('splash').classList.contains('hidden')) return;
     sfx.unlock();                              // le premier geste du joueur débloque aussi le son

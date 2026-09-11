@@ -9,6 +9,10 @@ L'écran d'accueil est une affiche pixel réduite à 418 px et ramenée à 64 co
 « PRESS START » clignote sans trouer le décor : un second calque, transparent partout ailleurs,
 recouvre la bande avec un court reconstitué, et son apparition alternée masque puis révèle le texte.
 
+La même affiche sert de fond au menu, calque posé cette fois — « PRESS START » y reste masqué. Le
+menu ne porte que trois boutons : **SOLO** (rogue lite ou exhibition), **EN LIGNE** et **OPTIONS**
+(l'aide à la visée et l'écran « comment jouer »).
+
 ## Jouer
 
 - **Sur GitHub Pages** : activer Pages dans *Settings → Pages* (source *GitHub Actions*, ou *Deploy from a branch* en pointant la racine de la branche). Le workflow `.github/workflows/pages.yml` déploie automatiquement à chaque push sur `main`.

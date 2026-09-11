@@ -65,21 +65,38 @@
   </div>
 
   <!-- ---------------------------------------------------------------- menu -->
-  <div id="menu" class="panel">
+  <!-- L'affiche reste au fond, sans sa bande « PRESS START » : trois boutons, rien d'autre. -->
+  <div id="menu" class="panel bare">
+    <div class="home">
+      <div class="splash-art still">
+        <img class="art" alt="">
+        <img class="band" alt="">
+      </div>
+      <div class="home-buttons">
+        <button id="soloBtn" class="primary">SOLO</button>
+        <button id="onlineBtn" class="primary">EN LIGNE</button>
+        <button id="optionsBtn" class="primary">OPTIONS</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------------- solo -->
+  <div id="solo" class="panel hidden">
     <div class="panel-inner">
-      <h1>🤖🏸 BOTminton</h1>
-      <p class="tag">BADMINTON · ROBOTS · PREMIER À 15</p>
-
-      <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
-
-      <h2>Mode</h2>
+      <h1>SOLO</h1>
       <button id="playBtn" class="primary">ROGUE LITE</button>
-      <p class="tag run-note">4 niveaux de 15 points · une carte tous les 5 points · protocole imposé chez le boss</p>
-      <button id="exhibBtn" class="ghost">EXHIBITION</button>
-      <p class="tag run-note">Un match libre en 15 points contre l'adversaire de ton choix</p>
-      <button id="onlineBtn" class="ghost">EN LIGNE</button>
-      <p class="tag run-note" id="onlineNote">Duel 1v1 en match libre, ou coop 2v2 en rogue lite · uniquement sur la page claude.ai</p>
-      <button id="helpBtn" class="ghost">Comment jouer ?</button>
+      <button id="exhibBtn" class="primary">EXHIBITION</button>
+      <button id="soloBack" class="ghost">Retour</button>
+    </div>
+  </div>
+
+  <!-- ------------------------------------------------------------- options -->
+  <div id="options" class="panel hidden">
+    <div class="panel-inner">
+      <h1>OPTIONS</h1>
+      <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
+      <button id="helpBtn" class="primary">COMMENT JOUER ?</button>
+      <button id="optionsBack" class="ghost">Retour</button>
     </div>
   </div>
 

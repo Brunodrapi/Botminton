@@ -47,6 +47,29 @@ canvas.fx-flip { transform: rotate(180deg); }
 }
 .splash-art .band { animation: press 1.15s steps(1) infinite; }
 @keyframes press { 0%, 58% { opacity: 0; } 59%, 100% { opacity: 1; } }
+/* Au menu, l'affiche sert de fond : la bande reste posée, « PRESS START » ne clignote plus. */
+.splash-art.still .band { animation: none; opacity: 1; }
+
+/* ------------------------------------------------------------------ menu d'accueil */
+.panel.bare { background: var(--bg); padding: calc(var(--sat) + 6px) 10px calc(var(--sab) + 10px); }
+.home { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; width: 100%; max-width: 460px; }
+.home .splash-art { width: min(100%, 46vh); }
+.home-buttons { width: 100%; display: grid; gap: 14px; }
+/* Sur fond sombre, la bordure d'encre des boutons disparaîtrait : on la double d'un liseré clair,
+   comme le cadre des panneaux, pour qu'ils gardent leur relief de touche de console. */
+.home-buttons button.primary {
+  margin-top: 0; padding: 16px 10px;
+  box-shadow: 0 0 0 3px var(--paper), 6px 6px 0 3px var(--ink);
+}
+.home-buttons button.primary:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 3px var(--paper), 2px 2px 0 3px var(--ink);
+}
+@media (orientation: landscape) {
+  .home { flex-direction: row; gap: 20px; max-width: 760px; }
+  .home .splash-art { width: min(52%, 86vh); flex: none; }
+  .home-buttons { flex: 1; }
+}
 .splash-hint { margin: 14px 0 0; font-size: 7px; color: var(--muted); letter-spacing: 1px; }
 @media (prefers-reduced-motion: reduce) { .splash-art .b { animation: none; } }
 
