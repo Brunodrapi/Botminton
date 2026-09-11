@@ -65,17 +65,26 @@
   </div>
 
   <!-- ---------------------------------------------------------------- menu -->
-  <!-- L'affiche reste au fond, sans sa bande « PRESS START » : trois boutons, rien d'autre. -->
+  <!-- La scène occupe le haut, les boutons sont rendus en HTML par-dessus le court. -->
   <div id="menu" class="panel bare">
+    <img id="menuArt" alt="">
     <div class="home">
-      <div class="splash-art still">
-        <img class="art" alt="">
-        <img class="band" alt="">
-      </div>
       <div class="home-buttons">
-        <button id="soloBtn" class="primary">SOLO</button>
-        <button id="onlineBtn" class="primary">EN LIGNE</button>
-        <button id="optionsBtn" class="primary">OPTIONS</button>
+        <button id="soloBtn" class="big amber">
+          <span class="ico">🏸</span>
+          <span class="txt"><span class="nm">SOLO</span><span class="ds">4 ADVERSAIRES · PREMIER À 15</span></span>
+          <span class="go">▶</span>
+        </button>
+        <button id="onlineBtn" class="big cream">
+          <span class="ico">🌐</span>
+          <span class="txt"><span class="nm">EN LIGNE</span><span class="ds">DUEL 1v1 · COOP 2v2</span></span>
+          <span class="go">▶</span>
+        </button>
+      </div>
+      <div class="home-corners">
+        <button id="helpBtn" class="icon"><span>❔</span><small>AIDE</small></button>
+        <p class="colophon">© 2026 ROLAND GARROS ROBOTICS<br>SMALL ROBOTS. BIG RALLIES.</p>
+        <button id="optionsBtn" class="icon"><span>⚙</span><small>OPTIONS</small></button>
       </div>
     </div>
   </div>
@@ -84,8 +93,16 @@
   <div id="solo" class="panel hidden">
     <div class="panel-inner">
       <h1>SOLO</h1>
-      <button id="playBtn" class="primary">ROGUE LITE</button>
-      <button id="exhibBtn" class="primary">EXHIBITION</button>
+      <button id="playBtn" class="big amber">
+        <span class="ico">🗺️</span>
+        <span class="txt"><span class="nm">ROGUE LITE</span><span class="ds">4 NIVEAUX · CARTES TOUS LES 5 POINTS</span></span>
+        <span class="go">▶</span>
+      </button>
+      <button id="exhibBtn" class="big cream">
+        <span class="ico">🏟️</span>
+        <span class="txt"><span class="nm">EXHIBITION</span><span class="ds">UN MATCH LIBRE EN 15 POINTS</span></span>
+        <span class="go">▶</span>
+      </button>
       <button id="soloBack" class="ghost">Retour</button>
     </div>
   </div>
@@ -95,7 +112,6 @@
     <div class="panel-inner">
       <h1>OPTIONS</h1>
       <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
-      <button id="helpBtn" class="primary">COMMENT JOUER ?</button>
       <button id="optionsBack" class="ghost">Retour</button>
     </div>
   </div>

@@ -9,9 +9,12 @@ L'écran d'accueil est une affiche pixel réduite à 418 px et ramenée à 64 co
 « PRESS START » clignote sans trouer le décor : un second calque, transparent partout ailleurs,
 recouvre la bande avec un court reconstitué, et son apparition alternée masque puis révèle le texte.
 
-La même affiche sert de fond au menu, calque posé cette fois — « PRESS START » y reste masqué. Le
-menu ne porte que trois boutons : **SOLO** (rogue lite ou exhibition), **EN LIGNE** et **OPTIONS**
-(l'aide à la visée et l'écran « comment jouer »).
+Le menu reprend la scène en fond, fondue dans le sol, et deux grands boutons — **SOLO** (rogue lite
+ou exhibition) et **EN LIGNE** — chacun avec son icône, son sous-titre et son chevron. Deux boutons
+carrés en pied d'écran ouvrent l'**aide** et les **options**. La scène est rognée au-dessus des
+boutons de la maquette : ceux-ci sont rendus en HTML, pour rester cliquables, traduisibles et nets à
+toute taille d'écran. Tous les panneaux suivent la même charte : coins arrondis, bordure bleu nuit,
+ombre portée, ambre pour l'action principale et crème pour le reste.
 
 ## Jouer
 
@@ -166,7 +169,7 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 - `src/audio.js` — sons synthétiques WebAudio.
 - `src/net.js` — jeu en ligne : salon, élection de l'hôte, instantanés et entrées. Il ignore quel transport le porte.
 - `src/room-rtc.js` — le transport de secours : même surface que la capacité `room`, au-dessus de WebRTC, pour les pages hébergées hors de claude.ai.
-- `src/title.js` — l'affiche d'accueil et son calque de clignotement, en données embarquées.
+- `src/title.js` — l'affiche d'accueil, son calque de clignotement et la scène du menu, en données embarquées.
 - `src/main.js` — accueil, menus, HUD, boucle.
 
 ```bash

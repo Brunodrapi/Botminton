@@ -376,7 +376,7 @@
   $('exhibBtn').addEventListener('click', () => showChassis('exhib'));
   $('oppBack').addEventListener('click', () => showChassis('exhib'));
   $('helpBtn').addEventListener('click', () => showPanel('help'));
-  $('helpBack').addEventListener('click', () => showPanel('options'));
+  $('helpBack').addEventListener('click', () => showPanel('menu'));   // l'aide a son bouton propre à l'accueil
   $('pauseBtn').addEventListener('click', () => {
     if (game.state === 'paused') return;
     // En ligne, la partie ne s'arrête pas pour les autres : on le dit plutôt que de mentir.
@@ -560,6 +560,7 @@
     el.querySelector('.art').src = window.TITLE_ART || '';
     el.querySelector('.band').src = window.TITLE_BAND || '';
   }
+  $('menuArt').src = window.MENU_ART || '';
   const leaveSplash = () => {
     if ($('splash').classList.contains('hidden')) return;
     sfx.unlock();                              // le premier geste du joueur débloque aussi le son
