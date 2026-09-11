@@ -216,6 +216,7 @@
 
   /* ---------------------------------------------------------------- HUD */
   let endShown = false;
+  let lastServing = null;
   const heatPct = $('heatPct');
   const heatBars = { you: $('heatBar'), bot: $('heatBarBot') };
   for (const k in heatBars) { heatBars[k].innerHTML = ''; for (let i = 0; i < 10; i++) { const d = document.createElement('i'); heatBars[k].appendChild(d); } }
@@ -239,6 +240,16 @@
     heatPct.textContent = p.energy.toFixed(0) + '%';
     heatBars.you.classList.toggle('full', p.energy >= RS.MAX_ENERGY);
     heatBars.bot.classList.toggle('full', b.energy >= RS.MAX_ENERGY);
+    // Les consignes vivent sous les boutons et changent au moment du service.
+    const serving = game.state === 'serve' && game.server === p;
+    if (serving !== lastServing) {
+      lastServing = serving;
+      $('hintA').innerHTML = serving ? 'SERVICE<br>coup droit' : 'COUP DROIT';
+      $('hintB').innerHTML = serving ? 'SERVICE<br>revers' : 'REVERS';
+      $('padHint').innerHTML = serving
+        ? '▲ long &nbsp;▼ court &nbsp;◀▶ côté<br>maintenir = vers le bord'
+        : '▲ fond &nbsp;▼ filet &nbsp;◀▶ côté<br>maintenir = vers la ligne';
+    }
     $('serveYou').classList.toggle('on', game.server === p);
     $('serveBot').classList.toggle('on', game.server === b);
   }

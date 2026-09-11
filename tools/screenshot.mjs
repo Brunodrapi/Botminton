@@ -38,21 +38,38 @@ await page.keyboard.press('b');
 await page.evaluate(() => {
   const { game, input } = window.__rogueShuttle;
   const RS = window.RogueShuttle;
-  let pressed = null;
+  let hold = null;                                           // { btn, until, aim } : maintien en cours
+  const HOLD = 0.34;                                         // durée de visée du joueur scripté
   setInterval(() => {
     const p = game.player, s = game.shuttle;
     input.keys = {};
     for (const k in input.held) input.held[k] = false;
-    if (pressed) { pressed = null; return; }                 // image de relâchement : le coup part
-    if (game.state === 'serve' && game.server === p) { input.just.push('B'); pressed = 'B'; input.held.B = true; return; }
+    // Un maintien en cours : on garde le bouton et la croix jusqu'à l'heure du relâchement.
+    if (hold) {
+      if (game.time < hold.until) {
+        input.held[hold.btn] = true;
+        input.keys = { arrowup: hold.aim > 0, arrowdown: hold.aim < 0 };
+        return;
+      }
+      hold = null; return;                                   // image de relâchement : le coup part
+    }
+    if (game.state === 'serve' && game.server === p) {
+      input.just.push('A'); input.held.A = true;
+      hold = { btn: 'A', until: game.time + HOLD, aim: 1 };
+      return;
+    }
     if (game.state !== 'rally' || p.dive || game.lastHitter === p || !game.pred) return;
     const info = game.interceptInfo(p);
     const t = info ? info.point : game.pred.landing;
     const dx = t.x - p.x, dz = t.z - RS.SWEET - p.z;
     input.keys = { arrowright: dx > 0.1, arrowleft: dx < -0.1, arrowup: dz > 0.1, arrowdown: dz < -0.1 };
     const tContact = (t.t || 0) - s.t, mid = (RS.SWING_HIT0 + RS.SWING_HIT1) / 2;
-    if (!p.act && p.swing <= 0 && tContact <= mid + 0.03 && tContact > -0.05) {
-      const b = s.y > 1.1 ? 'A' : 'B'; input.just.push(b); pressed = b; input.held[b] = true;
+    // On presse assez tôt pour que le maintien de visée finisse pile sur la fenêtre de contact.
+    if (!p.act && p.swing <= 0 && tContact <= mid + HOLD && tContact > -0.05) {
+      const b = t.x >= p.x ? 'A' : 'B';                       // coup droit à droite, revers à gauche
+      const wait = Math.max(0, Math.min(HOLD, tContact - mid));
+      input.just.push(b); input.held[b] = true;
+      hold = { btn: b, until: game.time + wait, aim: s.y > 1.1 ? 1 : -1 };
     }
   }, 16);
 });

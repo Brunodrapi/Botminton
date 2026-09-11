@@ -128,38 +128,118 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('next opponent starts at 0', g2.score[0] === 0 && g2.score[1] === 0 && g2.run.level === 1, `${g2.score.join('-')} niveau ${g2.run.level}`);
 }
 
-// Chemin d'entrée complet : croix + bouton → type de coup, profondeur et point de chute.
+// Chemin d'entrée complet : bouton + croix + durée de maintien → coup, visée et point de chute.
 // Ce trajet a déjà cassé en silence, il est vérifié de bout en bout.
 {
-  const dirs = { bas: { x: 0, y: -1 }, neutre: { x: 0, y: 0 }, haut: { x: 0, y: 1 }, 'haut-droit': { x: 1, y: 1 } };
-  const play = (btn, dir) => {
+  const dirs = {
+    neutre: { x: 0, y: 0 }, haut: { x: 0, y: 1 }, bas: { x: 0, y: -1 },
+    droite: { x: 1, y: 0 }, gauche: { x: -1, y: 0 }, 'haut-droit': { x: 0.71, y: 0.71 },
+  };
+  // hold = temps de maintien du bouton ; sx = position du volant, pour choisir coup droit ou revers.
+  const play = (btn, dir, hold = 0, sx = 0, sy = 1.6) => {
     const g = new RS.Game();
     g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
     const p = g.player; p.x = 0; p.z = -5;
-    Object.assign(g.shuttle, { x: 0, y: 1.6, z: -4.65, vx: 0, vy: 0, vz: 0, t: 0 });
+    Object.assign(g.shuttle, { x: sx, y: sy, z: -4.65, vx: 0, vy: 0, vz: 0, t: 0 });
     g.lastHitter = g.bot; g.state = 'rally'; g.time = 10;
-    g.update(1 / 60, { stick: dirs[dir], held: {}, just: [btn] });   // pression
-    g.update(1 / 60, { stick: dirs[dir], held: {}, just: [] });      // relâchement : le coup part
+    const st = dirs[dir];
+    g.update(1 / 60, { stick: st, held: { [btn]: true }, just: [btn] });   // pression : le robot se fige et vise
+    const frozen = p.moveX === 0 && p.moveZ === 0;
+    g.time += hold;                                                        // maintien
+    g.update(1 / 60, { stick: st, held: {}, just: [] });                   // relâchement : le coup part
     const act = p.act;
     if (!act) return null;
+    const aim = { x: act.target.x, z: act.target.z, f: act.target.f };
     g.hit(p, 0.3);
-    return { shot: act.shot, depth: act.depth, z: g.pred.landing.z, x: g.pred.landing.x };
+    return { btn: act.btn, aim, frozen, shot: p.swingShot, level: p.swingLevel,
+             z: g.pred.landing.z, x: g.pred.landing.x };
   };
-  const cases = [
-    ['B', 'bas', 'attack', 0], ['B', 'neutre', 'clear', 1], ['B', 'haut', 'clear', 2],
-    ['A', 'bas', 'drop', 0], ['A', 'neutre', 'drive', 1], ['A', 'haut', 'drive', 2],
-  ];
-  for (const [btn, dir, shot, depth] of cases) {
-    const r = play(btn, dir);
-    check(`${btn} + ${dir} → ${shot} profondeur ${depth}`, !!r && r.shot === shot && r.depth === depth,
-      r ? `${r.shot} ${r.depth} (z=${r.z.toFixed(2)})` : 'aucun coup');
-  }
-  const deep = play('B', 'haut'), mid = play('B', 'neutre'), short = play('B', 'bas');
-  check('les trois profondeurs sont bien étagées', deep.z > mid.z + 0.8 && mid.z > short.z + 0.8,
-    `${short.z.toFixed(2)} < ${mid.z.toFixed(2)} < ${deep.z.toFixed(2)}`);
-  check('le dégagé haut atteint le fond de court', deep.z > 6, deep.z.toFixed(2));
-  const diag = play('B', 'haut-droit');
-  check('la diagonale garde la profondeur et vise de côté', diag.depth === 2 && diag.x > 1, `x=${diag.x.toFixed(2)} z=${diag.z.toFixed(2)}`);
+  const HOLD_LINE = 0.62;   // TAP_TIME + SPREAD_TIME, la visée atteint la ligne
+  const HOLD_MAX = 1.0;     // maintien trop long : la visée sort du court
+
+  const tap = play('A', 'neutre');
+  check('une pression fige le robot pour viser', !!tap && tap.frozen);
+  check('A = coup droit', !!tap && tap.btn === 'A');
+  check('B = revers', (play('B', 'neutre') || {}).btn === 'B');
+  check('tap sans direction vise le milieu du camp adverse',
+    !!tap && Math.abs(tap.aim.x) < 0.01 && Math.abs(tap.aim.z - 3.5) < 0.01 && tap.aim.f === 0,
+    tap && `x=${tap.aim.x.toFixed(2)} z=${tap.aim.z.toFixed(2)} f=${tap.aim.f.toFixed(2)}`);
+
+  const deep = play('A', 'haut', HOLD_LINE);
+  const short = play('A', 'bas', HOLD_LINE);
+  check('maintien vers le haut = dégagé en fond de court', deep.shot === 'clear' && deep.z > 5.8,
+    `${deep.shot} z=${deep.z.toFixed(2)}`);
+  check('maintien vers le bas = amorti près du filet', short.shot === 'drop' && short.z < 2.2,
+    `${short.shot} z=${short.z.toFixed(2)}`);
+  check('sans maintien le coup reste médian', tap.shot === 'drive' && tap.z > 2.5 && tap.z < 4.6,
+    `${tap.shot} z=${tap.z.toFixed(2)}`);
+  check('les trois profondeurs sont bien étagées', deep.z > tap.z + 1 && tap.z > short.z + 1,
+    `${short.z.toFixed(2)} < ${tap.z.toFixed(2)} < ${deep.z.toFixed(2)}`);
+
+  // Plus on maintient, plus la visée glisse vers le bord.
+  const halfHold = play('A', 'haut', 0.30);
+  check('la profondeur croît avec la durée du maintien',
+    tap.aim.z < halfHold.aim.z && halfHold.aim.z < deep.aim.z,
+    `${tap.aim.z.toFixed(2)} < ${halfHold.aim.z.toFixed(2)} < ${deep.aim.z.toFixed(2)}`);
+  const rightLine = play('A', 'droite', HOLD_LINE);
+  const rightTap = play('A', 'droite', 0.15);
+  check('la latéralité croît aussi avec le maintien', rightLine.aim.x > rightTap.aim.x + 1.2,
+    `${rightTap.aim.x.toFixed(2)} → ${rightLine.aim.x.toFixed(2)}`);
+  check('le maintien complet amène la visée sur la ligne de côté',
+    Math.abs(rightLine.aim.x - 2.59) < 0.35, rightLine.aim.x.toFixed(2));
+  check('la croix gauche vise l\u2019autre bord', play('B', 'gauche', HOLD_LINE).aim.x < -2.2);
+
+  // Trop maintenir fait sortir le volant : c'est le risque assumé de la visée glissante.
+  const tooLong = play('A', 'haut', HOLD_MAX);
+  const tooWide = play('A', 'droite', HOLD_MAX);
+  check('un maintien trop long vise derrière la ligne de fond', tooLong.aim.z > 6.7,
+    tooLong.aim.z.toFixed(2));
+  check('un maintien trop long vise au-delà de la ligne de côté', tooWide.aim.x > 2.59,
+    tooWide.aim.x.toFixed(2));
+  check('la visée ne glisse pas indéfiniment', tooLong.aim.f <= 1.28 + 1e-9, tooLong.aim.f.toFixed(2));
+
+  const diag = play('A', 'haut-droit', HOLD_LINE);
+  check('la diagonale garde la profondeur et vise de côté', diag.z > 4.6 && diag.x > 1.2,
+    `x=${diag.x.toFixed(2)} z=${diag.z.toFixed(2)}`);
+
+  // Volant haut et cible médiane : c'est le smash.
+  const smash = play('A', 'neutre', 0, 0, 2.2);
+  check('un volant haut frappé à mi-court part en smash', smash.shot === 'smash', smash.shot);
+
+  // Frapper du mauvais côté interdit le coup parfait.
+  const wrong = play('A', 'neutre', 0, -0.9);
+  const right = play('A', 'neutre', 0, 0.9);
+  check('le bon côté de raquette autorise le coup parfait', right.level === 2, String(right.level));
+  check('le mauvais côté de raquette plafonne le coup', wrong.level <= 1, String(wrong.level));
+  check('le revers reprend le volant côté gauche', play('B', 'neutre', 0, -0.9).level === 2);
+}
+
+// Le service se joue comme un coup d'échange : la pression fige, le relâchement engage.
+{
+  const g = new RS.Game();
+  g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+  g.nextRally();
+  g.server = g.player; g.state = 'serve'; g.time = 10;
+  const p = g.player, before = { x: p.x, z: p.z };
+  g.update(1 / 60, { stick: { x: 1, y: 0 }, held: { A: true }, just: ['A'] });
+  check('le service fige le robot au lieu de partir tout de suite',
+    g.state === 'serve' && !!p.hold && p.moveX === 0 && p.moveZ === 0 && p.x === before.x,
+    `état ${g.state}`);
+  const aim = g.currentAim();
+  check('la mire est visible pendant le service', !!aim && aim.btn === 'A');
+  g.time += 0.62;
+  const wide = g.currentAim();
+  check('le maintien déplace la mire du service', wide.x > aim.x + 0.5,
+    `${aim.x.toFixed(2)} → ${wide.x.toFixed(2)}`);
+  // Trop maintenir au service fait franchir la ligne médiane : la mire doit le signaler.
+  p.aimX = -g.serveBoxSign; p.dirZ = 0; p.hold = { btn: 'A', t0: g.time - 10 };
+  const across = g.currentAim();
+  check('la mire du service prévient quand elle franchit la ligne médiane',
+    across.out && across.x * g.serveBoxSign <= 0, `x=${across.x.toFixed(2)} out=${across.out}`);
+  p.aimX = 0; p.hold = { btn: 'A', t0: g.time - 0.62 };
+  check('une mire restée dans la boîte de service ne prévient pas', !g.currentAim().out);
+  g.update(1 / 60, { stick: { x: 1, y: 0 }, held: {}, just: [] });
+  check('le relâchement engage le service', g.state === 'rally' && !p.hold, `état ${g.state}`);
 }
 
 // Effet des cartes
@@ -171,8 +251,12 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   g.takeCard('shuttle');
   g.score = [0, 0]; g.endPoint(g.player, 'POINT !');
   check('shuttle card gives 1.25 point', g.score[0] === 1.25, String(g.score[0]));
-  const charge = g.chargeTime(); g.takeCard('legs');
-  check('legs card shortens charge', g.chargeTime() < charge);
+  const aimBefore = g.spreadF(g.player, 0.3); g.takeCard('legs');
+  check('legs card speeds up aiming', g.spreadF(g.player, 0.3) > aimBefore,
+    `${aimBefore.toFixed(2)} → ${g.spreadF(g.player, 0.3).toFixed(2)}`);
+  const noise = g.spreadOf(g.player, 1, true); g.takeRacket('precision');
+  check('racket precision tightens the spread', g.spreadOf(g.player, 1, true) < noise,
+    `${noise.toFixed(2)} → ${g.spreadOf(g.player, 1, true).toFixed(2)}`);
   const reach = g.reachOf(g.player); g.takeRacket('reach');
   check('racket lengthens reach', g.reachOf(g.player) > reach);
   const [w0, w1] = g.hitWindow(); g.takeRacket('window');

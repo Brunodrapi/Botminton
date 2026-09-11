@@ -220,6 +220,8 @@
       b.drawImage(this.courtLayer, this.shakeX, this.shakeY);
       if (game.state !== 'menu') {
         const s = game.shuttle;
+        const aim = game.currentAim ? game.currentAim() : null;
+        if (aim) this.drawAim(aim);
         const eyes = game.eyesLv ? game.eyesLv() : 0;
         if (eyes > 0 && game.pred && game.state === 'rally' && game.lastHitter && game.lastHitter.isAI && !game.pred.net) this.drawLanding(game.pred.landing, eyes);
         this.drawShadow(s);
@@ -346,6 +348,21 @@
       }
     }
 
+    /** Mire de visée : elle glisse du centre vers le bord tant que le bouton est maintenu, et rougit hors du terrain. */
+    drawAim(aim) {
+      const b = this.bctx;
+      const p = this.px(aim.x, 0, aim.z);
+      const rx = Math.max(3, aim.spread * this.KX), ry = Math.max(2, aim.spread * this.KZ);
+      const col = aim.out ? '#f85858' : '#68f878';
+      b.save();
+      b.beginPath(); b.ellipse(p.x + 0.5, p.y + 0.5, rx, ry, 0, 0, Math.PI * 2);
+      b.globalAlpha = 0.22; b.fillStyle = col; b.fill();
+      b.globalAlpha = 0.9; b.strokeStyle = col; b.lineWidth = 1; b.stroke();
+      b.fillStyle = col;
+      b.fillRect(p.x - 2, p.y, 5, 1); b.fillRect(p.x, p.y - 1, 1, 3);
+      b.restore();
+    }
+
     /** Zone d'arrivée du volant (carte Optique prédictive) : large et floue au premier niveau, précise au troisième. */
     drawLanding(l, lv) {
       const b = this.bctx;
@@ -426,7 +443,7 @@
         else name = swingU < 0.55 ? 'hit_high' : 'follow';
         flip = !front;                              // joueur : raquette côté droit
       } else if (r.hold) {
-        name = game.chargeOf(r) >= 0 ? 'smash_prep' : 'prep';
+        name = game.shuttle.y >= RS.SMASH_H ? 'smash_prep' : 'prep';   // posture d'attaque : le volant est assez haut pour smasher
         flip = !front;
       } else if (game.state === 'serve' && game.server === r) {
         name = front ? 'idle' : 'back';
@@ -473,8 +490,8 @@
       const { name, flip } = this.robotPose(r, game);
       const src = this.tinted(sheet, r.tint ? r.color : null);
       const sy = p.y - jump - bob;
-      const charge = game.chargeOf(r);
-      // Jauge SUPER pleine : aura discrète. Smash chargé à bloc : le robot clignote en blanc.
+      const aim = game.aimF(r);
+      // Jauge SUPER pleine : aura discrète. Mire arrivée sur la ligne : le robot clignote, il faut relâcher.
       if (r.energy >= RS.MAX_ENERGY) {
         const g = this.silhouette(sheet);
         b.save(); b.globalAlpha = 0.18 + 0.14 * Math.sin(this.time * 7);
@@ -482,17 +499,11 @@
         b.restore();
       }
       this.drawSprite(sheet, name, p.x, sy, flip, src);
-      if (charge >= 1 && Math.floor(this.time * 12) % 2) {
+      if (aim >= 1 && Math.floor(this.time * 12) % 2) {
         const g = this.silhouette(sheet);
         b.save(); b.globalAlpha = 0.75;
         this.drawSprite(sheet, name, p.x, sy, flip, g);
         b.restore();
-      }
-
-      // barre de charge du smash (joueur) : n'apparaît qu'une fois le temps mort passé
-      if (!r.isAI && charge >= 0) {
-        b.fillStyle = PAL.outline; b.fillRect(p.x - 8, p.y + 3, 16, 4);
-        b.fillStyle = charge >= 1 ? LEVEL_COLORS[2] : LEVEL_COLORS[1]; b.fillRect(p.x - 7, p.y + 4, Math.round(14 * charge), 2);
       }
     }
 

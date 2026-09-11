@@ -96,6 +96,7 @@ button { font-family: inherit; }
 #dpad.right .tri.right { border-left-color: var(--cyan); opacity: 1; }
 #dpad.up .arm.v, #dpad.down .arm.v, #dpad.left .arm.h, #dpad.right .arm.h { background: #3a3a40; }
 
+#padHint { position: absolute; left: 8px; bottom: calc(var(--sab) + 4px); width: 174px; font-size: 6px; line-height: 1.8; color: var(--muted); text-align: center; }
 #buttons { position: absolute; right: 14px; bottom: calc(var(--sab) + 34px); width: 200px; height: 160px; }
 .btn-wrap { position: absolute; width: 84px; text-align: center; }
 .btn-wrap.b { left: 0; bottom: 0; }

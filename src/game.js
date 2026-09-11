@@ -6,11 +6,11 @@
 
   const CHASSIS = {
     light:    { key: 'light',    name: 'LIGHT',    speed: 7.6, accel: 80, smash: 0.85, energyMul: 1.2,  reach: 1.20, color: '#5ef2ff', accent: '#b8fbff',
-                desc: ['🟢 rapide', '🟢 charge vite', '🔴 smash faible'] },
+                desc: ['🟢 rapide', '🟢 jauge SUPER rapide', '🔴 smash faible'] },
     balanced: { key: 'balanced', name: 'BALANCED', speed: 6.4, accel: 70, smash: 1.0,  energyMul: 1.0,  reach: 1.25, color: '#7dff9a', accent: '#d6ffe0',
                 desc: ['⚪ tout moyen'] },
     heavy:    { key: 'heavy',    name: 'HEAVY',    speed: 5.4, accel: 55, smash: 1.25, energyMul: 0.85, reach: 1.35, color: '#ffb35e', accent: '#ffe0b8',
-                desc: ['🟢 énorme smash', '🔴 charge lente', '🔴 lent'] },
+                desc: ['🟢 énorme smash', '🔴 jauge SUPER lente', '🔴 lent'] },
   };
 
   const DIFFICULTY = {
@@ -21,12 +21,21 @@
   };
   const DIFF_ORDER = ['rookie', 'pro', 'elite', 'boss'];
 
-  const SHOT_NAMES = { clear: 'DÉGAGÉ', attack: 'DÉGAGÉ COURT', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
+  const SHOT_NAMES = { clear: 'DÉGAGÉ', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
-  const TAP_TIME = 0.10;       // temps mort avant que la charge du smash ne démarre
-  const CHARGE_TIME = 0.42;    // maintenir A jusque-là : smash prêt, le robot brille
+  const STROKE_OFF = 0.28;     // le point idéal se décale du côté de la raquette (coup droit) ou de l'autre (revers)
+  // Visée : une pression courte envoie au centre du camp adverse, un maintien fait glisser
+  // la cible vers le bord choisi à la croix, jusqu'à sortir du terrain.
+  const TAP_TIME = 0.08;
+  const SPREAD_TIME = 0.55;    // maintien nécessaire pour amener la visée sur la ligne
+  const SPREAD_MAX = 1.28;     // au-delà de 1, on vise dehors
+  const AIM_DEPTH = 3.5;       // profondeur du centre du camp adverse
+  const AIM_SPAN_Z = 3.05;
+  const AIM_SPAN_X = 2.62;
+  const SPREAD_BY_LEVEL = [1.15, 0.62, 0.3];   // dispersion en mètres selon la qualité du placement
+  const SMASH_H = 1.85;        // au-dessus, un coup visé mi-court part en smash
   // Le coup part au relâchement du bouton : la raquette balaie et ne touche que dans sa fenêtre de contact.
   const SWING_TIME = 0.30;
   const SWING_HIT0 = 0.04;
@@ -58,7 +67,7 @@
     { key: 'speed',    icon: '🦾', name: 'SERVO DE COURSE',    desc: (n) => `+${12 * n} % de vitesse de déplacement` },
     { key: 'power',    icon: '💥', name: 'BRAS HYDRAULIQUE',   desc: (n) => `+${15 * n} % de puissance de smash` },
     { key: 'eyes',     icon: '👁', name: 'OPTIQUE PRÉDICTIVE', desc: (n) => ['', 'Zone d\'arrivée du volant', 'Zone d\'arrivée resserrée', 'Point d\'arrivée précis'][n] },
-    { key: 'legs',     icon: '🦿', name: 'VÉRIN DE JAMBE',     desc: (n) => `−${18 * n} % de temps de charge du smash` },
+    { key: 'legs',     icon: '🦿', name: 'VÉRIN DE JAMBE',     desc: (n) => `La visée glisse ${18 * n} % plus vite vers les bords` },
     { key: 'thruster', icon: '🚀', name: 'PROPULSEUR DORSAL',  desc: (n) => `+${(0.25 * n).toFixed(2)} m de hauteur de smash` },
     { key: 'shuttle',  icon: '🏸', name: 'VOLANT LESTÉ',       desc: (n) => `+${(0.25 * n).toFixed(2)} point par point gagné` },
   ];
@@ -95,7 +104,7 @@
       energy: 0,
       hold: null, act: null, swing: 0, swingShot: null, swingLevel: 1, jumpT: 0, dive: null,
       stats: { hits: 0, perfect: 0, smashes: 0, supers: 0, whiffs: 0 },
-      ai: { reactAt: 0, shot: null, noiseX: 0, judgedOut: false, willDive: false, swingErr: 0 },
+      ai: { reactAt: 0, target: null, noiseX: 0, judgedOut: false, willDive: false, swingErr: 0 },
     };
   }
 
@@ -158,7 +167,52 @@
     racketLv(k) { return this.run.racket[k] || 0; }
     /** Niveau effectif de l'optique : la carte, ou l'aide activée dans le menu. */
     eyesLv() { return Math.max(this.cardLv('eyes'), this.assist ? 1 : 0); }
-    chargeTime() { return CHARGE_TIME * (1 - 0.18 * this.cardLv('legs')); }
+    /** Fraction de la visée déjà glissée vers le bord : 0 au centre, 1 sur la ligne, au-delà dehors. */
+    spreadF(r, held) {
+      const t = SPREAD_TIME * (r.isAI ? 1 : 1 - 0.18 * this.cardLv('legs'));
+      return clamp((held - TAP_TIME) / t, 0, SPREAD_MAX);
+    }
+    /** Cible d'un coup d'échange : centre du camp adverse, décalée vers le bord choisi. */
+    rallyTarget(r, ux, uz, held) {
+      const far = -r.side, f = this.spreadF(r, held);
+      return { x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z), f };
+    }
+    /** Cible d'un service : même principe, centré sur la boîte de service adverse. */
+    serveTarget(r, ux, uz, held) {
+      const far = -r.side, f = this.spreadF(r, held), b = this.serveBoxSign;
+      return { x: b * 1.3 + ux * f * 1.25, z: far * (4.0 + uz * f * 2.15), f };
+    }
+    /** Dispersion attendue, en mètres : elle dépend du placement et du cordage. */
+    spreadOf(r, level, good) {
+      const base = SPREAD_BY_LEVEL[level];
+      const k = r.isAI ? this.diff.aimNoise : Math.max(0.1, 1 - 0.3 * this.racketLv('precision'));
+      return base * k * (good ? 1 : 1.5);
+    }
+    /** Le volant est-il du côté de la raquette ? A = coup droit (à droite), B = revers (à gauche). */
+    goodStroke(r, btn) {
+      const d = this.shuttle.x - r.x;
+      return btn === 'B' ? d < 0.15 : d > -0.15;
+    }
+    /** Famille de trajectoire déduite de la cible et de la hauteur du volant. */
+    familyFor(y, tz) {
+      const depth = Math.abs(tz);
+      if (depth <= 2.2) return 'drop';
+      if (depth >= 5.0) return 'clear';
+      return y >= SMASH_H ? 'smash' : 'drive';
+    }
+    /** Visée courante du joueur, pour l'afficher pendant qu'il maintient le bouton. */
+    currentAim() {
+      const p = this.player, h = p.hold;
+      if (!h) return null;
+      const held = this.time - h.t0;
+      const serving = this.state === 'serve' && this.server === p;
+      const t = serving ? this.serveTarget(p, p.aimX, p.dirZ, held) : this.rallyTarget(p, p.aimX, p.dirZ, held);
+      const far = -p.side;
+      // Au service la mire doit rester dans la boîte adverse : trop à l'intérieur, elle franchit la ligne médiane.
+      const out = Math.abs(t.x) > COURT.halfWidthSingles || Math.abs(t.z) > COURT.halfLength || t.z * far <= 0.35
+        || (serving && (Math.abs(t.z) < COURT.shortService || t.x * this.serveBoxSign <= 0));
+      return { x: t.x, z: t.z, f: t.f, out, spread: this.spreadOf(p, 1, true), btn: h.btn };
+    }
     jumpReach() { return JUMP_REACH + 0.25 * this.cardLv('thruster'); }
     hitWindow() { const w = 0.03 * this.racketLv('window'); return [SWING_HIT0 - w * 0.5, SWING_HIT1 + w]; }
 
@@ -219,7 +273,7 @@
       this.state = 'serve';
       this.pointWinner = null;
       this.serveTimer = srv.isAI ? rnd(0.9, 1.5) : 0;
-      this.message = srv.isAI ? { text: 'SERVICE DU BOT', sub: '', t: 0 } : { text: 'À TOI DE SERVIR', sub: 'A COURT  B LONG', t: 0 };
+      this.message = null;        // les consignes sont écrites sous les boutons, pas en surimpression
     }
 
     /* ------------------------------------------------------------------ update */
@@ -251,10 +305,10 @@
         s.x = srv.x + 0.15 * (-srv.side); s.z = srv.z - srv.side * 0.45; s.y = 1.0;
         if (srv.isAI) {
           this.serveTimer -= dt;
-          if (this.serveTimer <= 0) this.serve(srv, Math.random() < 0.45 ? 'drop' : 'clear');
-        } else if (input.just.length) {
-          const btn = input.just[input.just.length - 1];
-          this.serve(srv, btn === 'A' ? 'drop' : 'clear');
+          if (this.serveTimer <= 0) {                       // le bot vise court ou long, un peu au hasard
+            const uz = Math.random() < 0.45 ? -1 : 1, ux = rnd(-1, 1);
+            this.serve(srv, 'A', this.serveTarget(srv, ux, uz, TAP_TIME + SPREAD_TIME * rnd(0.45, 0.85)));
+          }
         }
       } else if (this.state === 'rally') {
         const sdt = gdt * this.shuttleRate();
@@ -302,31 +356,32 @@
         if (Math.abs(mz) < 1e-6) mz = 0;
       }
       p.aimX = mx;
-      p.dirZ = mz;          // croix vers le haut (+1) = vers le filet, vers le bas (-1) = vers le fond
+      p.dirZ = mz;          // croix vers le haut (+1) : on court vers le filet, on vise le fond adverse
       if (p.dive) { p.moveX = 0; p.moveZ = 0; return; }        // plongeon en cours : plus aucune commande
-      if (this.state !== 'rally') { p.hold = null; p.act = null; p.moveX = mx; p.moveZ = mz; return; }
+      const serving = this.state === 'serve' && this.server === p;
+      if (this.state !== 'rally' && !serving) { p.hold = null; p.act = null; p.moveX = mx; p.moveZ = mz; return; }
       p.moveX = mx; p.moveZ = mz;
 
-      // Une pression n'arme rien : soit elle déclenche un plongeon, soit elle commence à charger.
+      // Une pression ne frappe pas : elle fige le robot et fait glisser la visée vers le bord choisi.
       for (const btn of input.just) {
         if (btn !== 'A' && btn !== 'B') continue;
-        const t = this.diveTarget(p);
-        if (t) { this.startDive(p, t.x, t.z); p.hold = null; return; }
+        if (!serving) {
+          const t = this.diveTarget(p);
+          if (t) { this.startDive(p, t.x, t.z); p.hold = null; return; }
+        }
         p.hold = { btn, t0: this.time };
       }
-      // Le coup part au relâchement : smash si la charge est pleine, sinon coup normal.
+      // Le coup part au relâchement, vers la cible atteinte par la visée.
       if (p.hold && !input.held[p.hold.btn]) {
         const h = p.hold; p.hold = null;
-        if (!p.act && p.swing <= 0) {
-          const charged = h.btn === 'A' && this.time - h.t0 >= this.chargeTime();
-          this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, depth: this.depthOf(mz) });
-        }
+        const held = this.time - h.t0;
+        if (serving) this.serve(p, h.btn, this.serveTarget(p, mx, mz, held));
+        else if (!p.act && p.swing <= 0) this.startSwing(p, { btn: h.btn, target: this.rallyTarget(p, mx, mz, held) });
       }
-      // Frapper ou charger cloue le robot sur place : c'est ce qui rend la visée à la croix précise.
+      // Viser cloue le robot sur place : c'est ce qui rend la croix utilisable comme mire.
       if (this.isCommitted(p)) { p.moveX = 0; p.moveZ = 0; }
     }
 
-    /** Traduit bouton + croix en type de frappe (le smash est traité à part, par la charge). */
     /** Le robot est engagé dans un coup : il tient un bouton ou son geste n'a pas fini sa fenêtre de contact. */
     isCommitted(r) {
       if (r.dive) return false;
@@ -334,32 +389,20 @@
       return !!(r.act && !r.act.dive && this.time - r.act.t0 <= SWING_PLANT);
     }
 
-    /** Profondeur visée : 0 court, 1 mi-court, 2 fond. Les diagonales comptent (croix quantifiée : ±0,71). */
-    depthOf(dirZ) { return dirZ < -0.5 ? 0 : dirZ > 0.5 ? 2 : 1; }
-
-    /** Le bouton donne la famille de trajectoire, la croix la profondeur. */
-    resolveShot(btn, dirZ) {
-      const d = this.depthOf(dirZ);
-      if (btn === 'B') return d === 0 ? 'attack' : 'clear';
-      return d === 0 ? 'drop' : 'drive';
-    }
-
-    /** Progression de la charge du smash (0 à 1), ou −1 si le robot ne charge pas. */
-    chargeOf(r) {
-      const h = r.hold;
-      if (!h || h.btn !== 'A') return -1;
-      const held = this.time - h.t0;
-      if (held < TAP_TIME) return -1;
-      const full = r.isAI ? CHARGE_TIME : this.chargeTime();
-      return clamp((held - TAP_TIME) / (full - TAP_TIME), 0, 1);
+    /** Avancement de la visée pendant le maintien (0 au centre, 1 sur la ligne), ou −1 si le robot ne vise pas. */
+    aimF(r) {
+      return r.hold ? this.spreadF(r, this.time - r.hold.t0) : -1;
     }
 
     /** Lance un coup de raquette. Il ne touchera que si le volant passe dans sa fenêtre de contact. */
-    startSwing(r, shot, opt) {
-      opt = opt || {};
-      r.act = { shot, t0: this.time, aim: opt.aim || 0, depth: opt.depth == null ? 1 : opt.depth, dive: !!opt.dive, lastD: null };
-      r.swing = SWING_TIME; r.swingShot = shot; r.swingLevel = 1;
-      this.events.push({ type: 'swing', robot: r, shot });
+    startSwing(r, opt) {
+      const far = -r.side;
+      const target = opt.target || { x: 0, z: far * AIM_DEPTH };
+      r.act = { btn: opt.btn || 'A', target, t0: this.time, dive: !!opt.dive, lastD: null };
+      // La famille exacte se décide au contact (elle dépend de la hauteur du volant) ; on devine pour l'animation.
+      const guess = opt.dive ? 'clear' : this.familyFor(this.shuttle.y, target.z);
+      r.swing = SWING_TIME; r.swingShot = guess; r.swingLevel = 1;
+      this.events.push({ type: 'swing', robot: r, shot: guess });
     }
 
     /** Coup dans le vide : la fenêtre s'est refermée sans contact. */
@@ -422,7 +465,7 @@
       const maxS = this.speedOf(r);
       const sp = clamp(d / (0.7 * DIVE_LUNGE), maxS, maxS * DIVE_SPEED);
       r.dive = { t: 0, dx: dx / d, dz: dz / d, sp };
-      this.startSwing(r, 'clear', { dive: true });
+      this.startSwing(r, { dive: true, btn: 'A', target: { x: 0, z: -r.side * 5.0 } });
       r.vx = dx / d * sp; r.vz = dz / d * sp;
       this.events.push({ type: 'dive', robot: r });
     }
@@ -461,26 +504,16 @@
     }
 
     /* ------------------------------------------------------------------ service */
-    serve(srv, kind) {
+    serve(srv, btn, target) {
       const s = this.shuttle;
-      const rcv = this.other(srv);
-      const far = -srv.side;
-      const boxSign = this.serveBoxSign;
-      let spec;
-      const noise = srv.isAI ? this.diff.aimNoise * 0.4 : 0.25;
-      if (kind === 'drop') {
-        spec = { mode: 'angle', angle: 22, target: { x: boxSign * rnd(0.5, 2.0) + rnd(-noise, noise), z: far * rnd(2.45, 2.9) }, clearance: 0.12 };
-      } else {
-        spec = { mode: 'angle', angle: 58, target: { x: boxSign * rnd(0.4, 2.1) + rnd(-noise, noise), z: far * rnd(5.7, 6.3) }, clearance: 1.0 };
-      }
-      spec.from = { x: s.x, y: s.y, z: s.z };
-      let plan = P.planShot(spec);
-      // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
-      // on recule la cible jusqu'à ce qu'il passe. Les frappes faibles gardent le droit de faire faute.
-      for (let i = 0; i < 8 && plan.net && level > 0; i++) {
-        spec.target.z += Math.sign(spec.target.z || 1) * 0.45;
-        plan = P.planShot(spec);
-      }
+      const depth = Math.abs(target.z);
+      const spread = this.spreadOf(srv, 2, true) * 0.6;
+      const tgt = { x: target.x + rnd(-spread, spread), z: target.z + rnd(-spread, spread) };
+      // Court : trajectoire tendue qui rase la bande. Long : cloche qui retombe au fond.
+      const long = depth > 4.6;
+      const spec = { mode: 'angle', angle: long ? 58 : depth > 3.2 ? 40 : 22, target: tgt,
+                     clearance: long ? 1.0 : 0.14, from: { x: s.x, y: s.y, z: s.z } };
+      const plan = P.planShot(spec);
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
       s.px = s.x; s.py = s.y; s.pz = s.z;
       this.lastHitter = srv;
@@ -505,10 +538,12 @@
         if (a.dive) { if (r.dive && r.dive.t > DIVE_LUNGE) continue; }
         else if (age < w0 || age > w1) continue;                   // hors de la fenêtre de contact
         if (s.z * r.side < -0.25) { a.lastD = null; continue; }
+        // Le point idéal se décale du côté de la raquette : coup droit à droite, revers à gauche.
+        const sweetX = r.x + (a.btn === 'B' ? -STROKE_OFF : STROKE_OFF);
         const sweetZ = r.z - r.side * SWEET;
-        const d = Math.hypot(s.x - r.x, s.z - sweetZ);
+        const d = Math.hypot(s.x - sweetX, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
-        const maxY = a.shot === 'smash' ? (r.isAI ? JUMP_REACH : this.jumpReach()) : 2.6;
+        const maxY = r.isAI ? JUMP_REACH : this.jumpReach();
         let reach = this.reachOf(r);
         if (r.dive) reach += DIVE_REACH;
         const inReach = dr <= reach && s.y <= maxY && s.y > 0.12;
@@ -526,21 +561,27 @@
       const s = this.shuttle;
       const a = r.act; r.act = null; r.hold = null;
       const wide = r.isAI ? 0 : 0.09 * this.racketLv('window');
-      const place = d <= 0.6 + wide ? 2 : d <= 1.05 + wide ? 1 : 0;
-      let level = place;                       // la qualité tient au placement ; le timing décide déjà si on touche
+      const place = d <= 0.55 + wide ? 2 : d <= 1.0 + wide ? 1 : 0;
+      const good = a.dive || this.goodStroke(r, a.btn);
+      let level = good ? place : Math.min(place, 1);     // frapper du mauvais côté interdit le coup parfait
       if (r.isAI) level = this.aiLevel(level);
 
-      let shot = a.shot, note = null;
-      if (a.dive) { shot = 'clear'; level = Math.min(level, 1); note = 'SAUVETAGE!'; }
-      else if (shot === 'smash' && s.y < 1.75) { shot = 'drive'; note = 'TROP BAS'; }
+      // La cible visée reçoit sa dispersion : c'est elle qui décide de la famille de trajectoire.
+      const spread = this.spreadOf(r, level, good);
+      const tx = clamp(a.target.x + rnd(-spread, spread), -3.6, 3.6);
+      const tz = a.target.z + rnd(-spread, spread);
+      let shot = a.dive ? 'clear' : this.familyFor(s.y, tz);
+      let note = null;
+      if (a.dive) { level = Math.min(level, 1); note = 'SAUVETAGE!'; }
+      else if (!good) note = a.btn === 'B' ? 'REVERS FORCÉ' : 'COUP DROIT FORCÉ';
+
       const jump = shot === 'smash' && s.y > 2.5;
       const sup = shot === 'smash' && r.energy >= MAX_ENERGY;
       if (sup) { r.energy = 0; r.stats.supers++; level = 2; note = 'SUPER SMASH!'; }
-      else if (jump) note = 'JUMP SMASH!';
+      else if (jump) note = note || 'JUMP SMASH!';
       if (jump) r.jumpT = JUMP_TIME;
 
-      const spec = this.shotSpec(r, shot, level, r.isAI ? 0 : a.aim, sup, a.depth);
-      if (jump && spec.mode === 'speed') spec.speed *= 1.1;
+      const spec = this.shotSpec(r, shot, level, { x: tx, z: tz }, sup);
       spec.from = { x: s.x, y: s.y, z: s.z };
       let plan = P.planShot(spec);
       // Un coup correct ne doit pas finir dans le filet par pure géométrie (amorti très court joué de loin) :
@@ -564,7 +605,6 @@
 
       if (sup) { this.shake = Math.max(this.shake, 0.35); this.hitStop = 0.11; }
       else {
-        // la jauge monte sur ce qui est bien joué
         let gain = [0, 1, 3][level];
         if (shot === 'smash') gain += 3;
         if (jump) gain += 2;
@@ -580,66 +620,30 @@
       this.onHitFor(this.other(r));
     }
 
-    shotSpec(r, shot, level, aim, sup, depth) {
-      const s = this.shuttle;
-      const far = -r.side;
-      const opp = this.other(r);
-      let aimX;
-      if (r.isAI) {
-        const away = opp.x > 0.35 ? -1 : opp.x < -0.35 ? 1 : (Math.random() < 0.5 ? -1 : 1);
-        aimX = away * rnd(1.0, 2.0);
-        if (shot === 'drop' && Math.random() < 0.5) aimX = -Math.sign(s.x || 1) * rnd(0.6, 1.8);
-      } else {
-        aimX = (aim || 0) * 2.1;
-      }
-      const noise = [1.3, 0.5, 0.15][level] * (r.isAI ? this.diff.aimNoise : Math.max(0, 1 - 0.3 * this.racketLv('precision')));
-      const tx = clamp(aimX, -2.2, 2.2) + rnd(-noise, noise);
-      const y = s.y;
-      let spec;
+    /** Forme de trajectoire pour atteindre la cible déjà décidée par la visée. */
+    shotSpec(r, shot, level, target, sup) {
+      const y = this.shuttle.y;
+      const pw = r.isAI ? 1 : 1 + 0.15 * this.cardLv('power');
       switch (shot) {
-        case 'clear': {   // croix neutre : dégagé mi-court ; croix haut : dégagé au fond
-          const deep = depth >= 2;
-          const tz = (deep ? [5.3, 6.0, 6.45] : [4.0, 4.7, 5.2])[level];
-          const angle = level === 0 ? 60 : (deep ? (y > 1.6 ? 42 : 50) : (y > 1.6 ? 38 : 46));
-          spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 1.2 : 0.7 };
-          break;
-        }
-        case 'attack': { // croix bas : dégagé court, tendu, il tombe devant
-          const tz = [3.0, 3.6, 4.1][level];
-          const angle = level === 0 ? 50 : (y > 1.6 ? 24 : 34);
-          spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: level === 0 ? 0.9 : 0.5 };
-          break;
+        case 'clear': {
+          const angle = level === 0 ? 58 : (y > 1.6 ? 42 : 50);
+          return { mode: 'angle', angle, target, clearance: level === 0 ? 1.2 : 0.7 };
         }
         case 'drop': {
-          const tz = [2.7, 1.5, 0.75][level];
           const overhead = y > COURT.netHeight + 0.15;
           const angle = level === 0 ? 30 : overhead ? -8 : 30;
-          spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: [0.55, 0.28, 0.12][level] };
-          break;
+          return { mode: 'angle', angle, target, clearance: [0.55, 0.28, 0.12][level] };
         }
         case 'smash': {
-          if (sup) { spec = { mode: 'speed', speed: 34 * r.chassis.smash * (r.isAI ? 1 : 1 + 0.15 * this.cardLv('power')), target: { x: tx, z: far * 2.9 }, clearance: 0.08 }; break; }
-          if (level === 0) {
-            spec = { mode: 'angle', angle: 18, target: { x: tx, z: far * 4.8 }, clearance: 0.45 };
-          } else {
-            let speed = (level === 2 ? 27 : 22) * r.chassis.smash * (r.isAI ? 1 : 1 + 0.15 * this.cardLv('power'));
-            spec = { mode: 'speed', speed, target: { x: tx, z: far * (level === 2 ? 3.3 : 4.3) }, clearance: level === 2 ? 0.1 : 0.3 };
-          }
-          break;
+          if (sup) return { mode: 'speed', speed: 34 * r.chassis.smash * pw, target, clearance: 0.08 };
+          if (level === 0) return { mode: 'angle', angle: 18, target, clearance: 0.45 };
+          return { mode: 'speed', speed: (level === 2 ? 27 : 22) * r.chassis.smash * pw, target, clearance: level === 2 ? 0.1 : 0.3 };
         }
-        default: {        // drive — croix neutre : mi-court ; croix haut : jusqu'au fond
-          const deep = depth >= 2;
-          const tz = (deep ? [4.8, 5.6, 6.1] : [3.4, 4.2, 4.8])[level];
-          const angle = level === 0 ? 32 : (y > 1.4 ? (deep ? 6 : 2) : (deep ? 18 : 12));
-          spec = { mode: 'angle', angle, target: { x: tx, z: far * tz }, clearance: [0.6, 0.3, 0.15][level] };
+        default: {
+          const angle = level === 0 ? 32 : (y > 1.4 ? 6 : 14);
+          return { mode: 'angle', angle, target, clearance: [0.6, 0.3, 0.15][level] };
         }
       }
-      // Frappe faible : une fois sur trois, c'est carrément une faute.
-      if (level === 0 && Math.random() < 0.33) {
-        if (Math.random() < 0.5) spec = { mode: 'angle', angle: -10, target: { x: tx, z: far * 0.8 }, clearance: -9 };
-        else spec = { mode: 'angle', angle: 24, target: { x: tx + Math.sign(tx || 1) * 1.2, z: far * rnd(7.4, 8.2) }, clearance: 0.6 };
-      }
-      return spec;
     }
 
     /** Appelé quand `r` va devoir renvoyer le volant. */
@@ -649,7 +653,6 @@
       const sp = Math.hypot(this.shuttle.vx, this.shuttle.vy, this.shuttle.vz);
       // un smash surprend : réaction plus lente
       r.ai.reactAt = this.time + d.reaction * rnd(0.8, 1.25) * (sp > 16 ? 1.4 : 1);
-      r.ai.shot = null;
       r.ai.noiseX = rnd(-1, 1) * d.posNoise;
       const out = this.pred && !this.pred.net && !P.inSingles(this.pred.landing.x, this.pred.landing.z, -0.1);
       r.ai.judgedOut = out && Math.random() < d.judge;
@@ -681,15 +684,12 @@
         if (target) {
           tx = target.x + ai.ai.noiseX;
           tz = target.z + side * SWEET;
-          if (!ai.ai.shot) {
-            ai.ai.shot = this.aiChooseShot(ai, target);
-            ai.ai.depth = ai.ai.shot === 'clear' ? (Math.random() < 0.65 ? 2 : 1) : (Math.random() < 0.45 ? 2 : 1);
-          }
+          if (!ai.ai.target) ai.ai.target = this.aiAim(ai, target);
           // Le geste est déclenché pour que sa fenêtre de contact tombe sur l'arrivée du volant.
           if (!ai.act && ai.swing <= 0 && s.z * side > -0.3) {
             const near = Math.hypot(target.x - ai.x, tz - ai.z) < this.reachOf(ai) * 2;
             const start = (target.t - s.t) / this.shuttleRate() - (SWING_HIT0 + SWING_HIT1) / 2 + ai.ai.swingErr;
-            if (near && start <= 0) this.startSwing(ai, ai.ai.shot, { depth: ai.ai.depth });
+            if (near && start <= 0) this.startSwing(ai, { btn: target.x >= ai.x ? 'A' : 'B', target: ai.ai.target });
           }
         }
       } else {
@@ -708,16 +708,19 @@
       }
     }
 
-    aiChooseShot(ai, p) {
-      const d = this.diff;
-      const h = p.y, depth = Math.abs(p.z);
-      const r = Math.random();
-      const canSmash = h >= 1.9 && depth <= 5.2;
-      if (canSmash && (ai.energy >= MAX_ENERGY || r < d.aggression)) return 'smash';
-      if (h >= 1.9) return r < 0.45 ? 'drop' : r < 0.75 ? 'clear' : 'attack';
-      if (h >= 1.15) return r < 0.35 ? 'drive' : r < 0.65 ? 'clear' : r < 0.85 ? 'attack' : 'drop';
-      if (depth < 2.6) return r < 0.5 ? 'drop' : 'clear';
-      return r < 0.8 ? 'clear' : 'drive';
+    /** Le bot choisit une zone plutôt qu'un type de coup : la trajectoire en découle. */
+    aiAim(ai, p) {
+      const d = this.diff, far = -ai.side, opp = this.other(ai);
+      const away = opp.x > 0.35 ? -1 : opp.x < -0.35 ? 1 : (Math.random() < 0.5 ? -1 : 1);
+      const h = p.y, r = Math.random();
+      let uz;
+      if (h >= 1.9 && (ai.energy >= MAX_ENERGY || r < d.aggression)) uz = rnd(-0.2, 0.2);        // smash mi-court
+      else if (h >= 1.9) uz = r < 0.45 ? rnd(-0.95, -0.65) : rnd(0.6, 0.95);                     // amorti ou dégagé
+      else if (h >= 1.15) uz = r < 0.35 ? rnd(-0.25, 0.25) : r < 0.7 ? rnd(0.6, 0.95) : rnd(-0.95, -0.6);
+      else uz = r < 0.75 ? rnd(0.65, 0.95) : rnd(-0.9, -0.6);
+      const f = clamp(1.05 - d.aimNoise * 0.5, 0.55, 1);      // un bon bot ose viser près des lignes
+      const ux = away * rnd(0.3, 1);
+      return { x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z) };
     }
 
     aiLevel(level) {
@@ -803,5 +806,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SWEET, STROKE_OFF, TAP_TIME, SPREAD_TIME, SPREAD_MAX, SMASH_H, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

@@ -47,9 +47,10 @@
       </div>
     </div>
     <div id="buttons">
-      <div class="btn-wrap b"><button class="btn" data-btn="B" aria-label="B"></button><span>B</span><small>DÉGAGÉ<br>▼ court ▲ fond</small></div>
-      <div class="btn-wrap a"><button class="btn" data-btn="A" aria-label="A"></button><span>A</span><small>DRIVE · SMASH<br>▼ amorti ▲ fond</small></div>
+      <div class="btn-wrap b"><button class="btn" data-btn="B" aria-label="B"></button><span>B</span><small id="hintB">REVERS</small></div>
+      <div class="btn-wrap a"><button class="btn" data-btn="A" aria-label="A"></button><span>A</span><small id="hintA">COUP DROIT</small></div>
     </div>
+    <div id="padHint"></div>
   </div>
 
   <!-- ---------------------------------------------------------------- menu -->
@@ -73,21 +74,17 @@
     <div class="panel-inner">
       <h1>Comment jouer</h1>
       <ul class="help">
-        <li><b>Croix</b> : 8 directions. Gauche/droite au moment de la frappe oriente le volant.</li>
-        <li><b>Tape A</b> = drive (tendu). <b>Tape A + croix vers le haut</b> = amorti. La frappe reste en attente et tu continues de courir.</li>
-        <li><b>SMASH</b> : <b>maintiens</b> A pour préparer le smash (barre sous le robot, elle démarre après un court temps mort). Barre pleine + volant haut = SMASH. Très haut = le robot <b>saute</b> et smashe.</li>
-        <li><b>Tape B</b> = dégagé long (haut et au fond). <b>Tape B + croix vers le bas</b> = dégagé court, tendu et mi-court. Aucune charge sur ces coups.</li>
-        <li><b>PLONGEON</b> : si tu es <b>en pleine course</b> et que le volant passe hors de portée, appuyer sur A ou B fait plonger le robot pour le rattraper. Il remet le volant haut, puis reste au sol un instant avant de se relever. Le bot en fait autant.</li>
-        <li>Bouton <b>maintenu</b> = le robot s'immobilise et la croix sert à orienter le coup. Bouton <b>tapé</b> = coup rapide, le robot reste libre de ses mouvements.</li>
-        <li>Le niveau de l'adversaire change le <b>tempo</b> : tout est plus lent en Rookie, plus rapide en Elite et encore plus contre le Boss.</li>
-        <li>Qualité = <b>placement</b>. Point idéal 35 cm devant le robot (la petite croix quand tu es armé).
-          <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span>. Mal placé = faible, et parfois faute.</li>
-        <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés (+11 pour un parfait), les smashs (+8) et les sauvetages (+12). Pleine, ton robot s'auréole : le prochain smash devient un <b>SUPER SMASH</b>, foudroyant, et vide la jauge.</li>
-        <li><b>Run</b> : 4 niveaux (Rookie, Pro, Elite, Boss). Chaque niveau se joue en <b>15 points</b> ; si le bot atteint 15 avant toi, la run s'arrête.</li>
-        <li>Dès que <b>l'un des deux</b> atteint 5 puis 10 points, tu choisis entre <b>3 cartes</b> qui améliorent le robot, cumulables 3 fois. Si c'est le bot qui franchit le palier, la carte te sert à revenir.</li>
-        <li>À <b>15 points</b> : le bot devant, la run s'arrête ; toi devant, tu gagnes une carte de plus, un <b>modificateur de raquette</b>, et tu passes à l'adversaire suivant.</li>
+        <li><b>A</b> = coup droit, <b>B</b> = revers. Le volant à ta droite se prend en coup droit, à ta gauche en revers. Le mauvais côté interdit le coup parfait et disperse la frappe.</li>
+        <li>Une pression <b>fige</b> le robot et fait apparaître la <b>mire</b> au centre du camp adverse. La croix choisit le bord vers lequel elle glisse : <b>▲ le fond</b>, <b>▼ le filet</b>, <b>◀ ▶ les côtés</b>, les diagonales pour les coins.</li>
+        <li>Plus tu <b>maintiens</b>, plus la mire s'approche de la ligne. Elle <b>rougit</b> quand elle sort : relâche avant. Le coup part au relâchement.</li>
+        <li>La trajectoire découle de la cible : près du filet un <b>amorti</b>, au fond un <b>dégagé</b>, entre les deux un <b>drive</b>, ou un <b>SMASH</b> si le volant est haut.</li>
+        <li>Le <b>service</b> suit les mêmes règles, la mire restant dans la boîte de service adverse.</li>
+        <li>Qualité = <b>placement</b>. Le point idéal est 35 cm devant le robot, décalé du côté de la raquette.
+          <span class="q red">FAIBLE</span> <span class="q yellow">OK</span> <span class="q green">PARFAIT</span>. Mal placé, le coup part n'importe où.</li>
+        <li><b>PLONGEON</b> : en pleine course, si le volant passe hors de portée, A ou B fait plonger le robot. Il remet haut, puis reste au sol un instant. Le bot en fait autant.</li>
+        <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés, les smashs et les sauvetages. Pleine, ton robot s'auréole et son prochain smash devient un <b>SUPER SMASH</b> qui vide la jauge.</li>
+        <li><b>Run</b> : 4 niveaux de <b>15 points</b>. Dès que l'un des deux atteint 5 puis 10, tu choisis entre <b>3 cartes</b>, cumulables 3 fois. À 15, le bot devant arrête la run ; toi devant, une carte de plus, un <b>modificateur de raquette</b>, et l'adversaire suivant.</li>
         <li>Le <b>boss</b> impose un protocole tiré au sort : volant survolté, servos bridés, image monochrome ou sépia, terrain à l'envers, panne de lumière ou lignes effacées.</li>
-        <li>Service : <b>A</b> court, <b>B</b> long.</li>
         <li>Clavier : flèches / ZQSD pour bouger, <b>A</b> (ou X, espace) et <b>B</b> (ou C).</li>
       </ul>
       <button id="helpBack" class="primary">OK</button>
