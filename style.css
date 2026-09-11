@@ -49,7 +49,8 @@ button { font-family: inherit; }
 #hud .name { font-size: 9px; color: var(--paper); display: flex; align-items: center; gap: 5px; }
 #hud .side.bot .name { justify-content: flex-end; }
 #hud .name small { color: var(--muted); font-size: 7px; }
-#hud .score { font-size: 30px; line-height: 1; margin-top: 8px; color: #fff; font-variant-numeric: tabular-nums; }
+#hud .score { font-size: 30px; line-height: 1; margin-top: 8px; color: #fff; font-variant-numeric: tabular-nums; white-space: nowrap; }
+#hud .score.long { font-size: 18px; margin-top: 15px; }
 .serve-dot { width: 7px; height: 7px; background: var(--ink-soft); display: inline-block; }
 .serve-dot.on { background: var(--green); }
 #hud .center { flex: 1; padding: 2px 8px 0; }

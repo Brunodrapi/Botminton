@@ -22,7 +22,6 @@
   const DIFF_ORDER = ['rookie', 'pro', 'elite', 'boss'];
 
   const SHOT_NAMES = { clear: 'DÉGAGÉ', attack: 'DÉGAGÉ COURT', drop: 'AMORTI', smash: 'SMASH', drive: 'DRIVE', serve: 'SERVICE' };
-  const LEVEL_NAMES = ['FAIBLE', 'OK', 'PARFAIT'];
   const LEVEL_COLORS = ['#ff5252', '#ffd54a', '#5dff7a'];
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
@@ -121,7 +120,6 @@
     startExhibition(opts) {
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
-      this.runTime = 0;
       this.startMatch({ chassis: this.chassisKey, difficulty: opts.difficulty || 'rookie', assist: this.assist });
     }
 
@@ -132,7 +130,6 @@
       this.run = { level: start, stage: 0, cards: {}, racket: {}, handicap: null, levels: 0 };
       this.chassisKey = opts.chassis || 'balanced';
       this.assist = !!opts.assist;
-      this.runTime = 0;
       this.startRound();
     }
 
@@ -322,7 +319,7 @@
         const h = p.hold; p.hold = null;
         if (!p.act && p.swing <= 0) {
           const charged = h.btn === 'A' && this.time - h.t0 >= this.chargeTime();
-          this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, dirZ: mz });
+          this.startSwing(p, charged ? 'smash' : this.resolveShot(h.btn, mz), { aim: mx, depth: this.depthOf(mz) });
         }
       }
       // Frapper ou charger cloue le robot sur place : c'est ce qui rend la visée à la croix précise.
@@ -401,12 +398,6 @@
         fallback = p;
       }
       return fallback ? { point: fallback, reachable: false } : null;
-    }
-
-    /** Point d'interception atteignable sur la trajectoire prédite (ou null). */
-    interceptFor(r) {
-      const i = this.interceptInfo(r);
-      return i && i.point;
     }
 
     /** Point à rattraper en plongeant, ou null : il faut être lancé, hors de portée, mais pas trop loin. */
@@ -810,5 +801,5 @@
     resume() { if (this.state === 'paused') this.state = this.prevState || 'serve'; }
   }
 
-  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
+  root.RogueShuttle = { Game, CHASSIS, DIFFICULTY, DIFF_ORDER, SHOT_NAMES, LEVEL_COLORS, SWEET, TAP_TIME, CHARGE_TIME, SWING_TIME, SWING_HIT0, SWING_HIT1, MAX_ENERGY, JUMP_TIME, CARDS, RACKETS, HANDICAPS, CARD_STEPS, LEVEL_TARGET, UP_MAX, fmtScore, DIVE_LUNGE, DIVE_GROUND, DIVE_RISE, DIVE_TOTAL };
 })(typeof window !== 'undefined' ? window : globalThis);

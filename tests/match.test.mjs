@@ -115,6 +115,40 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('next opponent starts at 0', g2.score[0] === 0 && g2.score[1] === 0 && g2.run.level === 1, `${g2.score.join('-')} niveau ${g2.run.level}`);
 }
 
+// Chemin d'entrée complet : croix + bouton → type de coup, profondeur et point de chute.
+// Ce trajet a déjà cassé en silence, il est vérifié de bout en bout.
+{
+  const dirs = { bas: { x: 0, y: -1 }, neutre: { x: 0, y: 0 }, haut: { x: 0, y: 1 }, 'haut-droit': { x: 1, y: 1 } };
+  const play = (btn, dir) => {
+    const g = new RS.Game();
+    g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+    const p = g.player; p.x = 0; p.z = -5;
+    Object.assign(g.shuttle, { x: 0, y: 1.6, z: -4.65, vx: 0, vy: 0, vz: 0, t: 0 });
+    g.lastHitter = g.bot; g.state = 'rally'; g.time = 10;
+    g.update(1 / 60, { stick: dirs[dir], held: {}, just: [btn] });   // pression
+    g.update(1 / 60, { stick: dirs[dir], held: {}, just: [] });      // relâchement : le coup part
+    const act = p.act;
+    if (!act) return null;
+    g.hit(p, 0.3);
+    return { shot: act.shot, depth: act.depth, z: g.pred.landing.z, x: g.pred.landing.x };
+  };
+  const cases = [
+    ['B', 'bas', 'attack', 0], ['B', 'neutre', 'clear', 1], ['B', 'haut', 'clear', 2],
+    ['A', 'bas', 'drop', 0], ['A', 'neutre', 'drive', 1], ['A', 'haut', 'drive', 2],
+  ];
+  for (const [btn, dir, shot, depth] of cases) {
+    const r = play(btn, dir);
+    check(`${btn} + ${dir} → ${shot} profondeur ${depth}`, !!r && r.shot === shot && r.depth === depth,
+      r ? `${r.shot} ${r.depth} (z=${r.z.toFixed(2)})` : 'aucun coup');
+  }
+  const deep = play('B', 'haut'), mid = play('B', 'neutre'), short = play('B', 'bas');
+  check('les trois profondeurs sont bien étagées', deep.z > mid.z + 0.8 && mid.z > short.z + 0.8,
+    `${short.z.toFixed(2)} < ${mid.z.toFixed(2)} < ${deep.z.toFixed(2)}`);
+  check('le dégagé haut atteint le fond de court', deep.z > 6, deep.z.toFixed(2));
+  const diag = play('B', 'haut-droit');
+  check('la diagonale garde la profondeur et vise de côté', diag.depth === 2 && diag.x > 1, `x=${diag.x.toFixed(2)} z=${diag.z.toFixed(2)}`);
+}
+
 // Effet des cartes
 {
   const g = new RS.Game(); g.startRun({ chassis: 'balanced' });

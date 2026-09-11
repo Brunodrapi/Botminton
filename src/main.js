@@ -222,8 +222,12 @@
   }
   function updateHud() {
     if (game.state === 'menu') return;
-    $('scoreYou').textContent = RS.fmtScore(game.score[0]);
-    $('scoreBot').textContent = RS.fmtScore(game.score[1]);
+    const you = RS.fmtScore(game.score[0]), bot = RS.fmtScore(game.score[1]);
+    $('scoreYou').textContent = you;
+    $('scoreBot').textContent = bot;
+    // un score fractionnaire (volant lesté) tient sur quatre ou cinq signes : on réduit la taille
+    $('scoreYou').classList.toggle('long', you.length > 2);
+    $('scoreBot').classList.toggle('long', bot.length > 2);
     $('stage').textContent = game.run.solo
       ? `EXHIBITION · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`
       : `NIVEAU ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`;
@@ -253,7 +257,7 @@
     const p = game.player;
     const m = Math.floor(game.matchTime / 60), s = Math.floor(game.matchTime % 60);
     const rows = [
-      [game.run.solo ? 'Adversaire' : 'Niveaux franchis', game.run.solo ? game.diff.name : game.run.levels],
+      [game.run.solo ? 'Adversaire' : 'Niveaux franchis', game.run.solo ? game.diff.name : game.run.levels + (won ? 1 : 0)],
       ['Durée', `${m}:${String(s).padStart(2, '0')}`],
       ['Frappes', p.stats.hits],
       ['Parfaites', p.stats.perfect],
