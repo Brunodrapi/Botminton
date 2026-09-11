@@ -2,7 +2,7 @@ name: Deploy to GitHub Pages
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'claude/**']
   workflow_dispatch:
 
 permissions:
@@ -24,6 +24,7 @@ jobs:
           node-version: 22
       - run: node tests/physics.test.mjs
       - run: node tests/match.test.mjs
+      - run: node tests/net.test.mjs
 
   deploy:
     needs: test

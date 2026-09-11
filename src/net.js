@@ -69,6 +69,7 @@
       this.lastEvent = 0;
       this.phase = null;         // 'choose' pendant le choix des cartes, 'ready' une fois choisi
       this.kind = null;          // 'room' sur claude.ai, 'rtc' partout ailleurs
+      this.onClaude = false;     // la page tourne dans un artefact claude.ai
       this.rtc = null;
     }
 
@@ -83,6 +84,7 @@
       if (root.claude && typeof root.claude.use === 'function') {
         try { r = await root.claude.use('room'); } catch (_) { r = null; }
       }
+      this.onClaude = !!(root.claude && typeof root.claude.use === 'function');
       if (r) this.kind = 'room';
       else if (root.RoomRTC && root.RoomRTC.available()) { r = this.rtc = new root.RoomRTC(); this.kind = 'rtc'; }
       if (!r) return false;
@@ -96,6 +98,17 @@
     }
 
     connected() { return !!this.room && this.room.connected(); }
+
+    /** Qui est là, maintenant. `peers()` est un accesseur synchrone fait pour être relu à chaque
+     *  fois : on le relit, au lieu de se fier au seul évènement. Celui qui ouvrait une table restait
+     *  invisible dans son propre salon tant que personne d'autre ne bougeait — il n'y avait alors
+     *  rien pour déclencher l'évènement, donc rien ne remplaçait la liste d'avant. */
+    livePeers() {
+      if (this.room && typeof this.room.peers === 'function') {
+        try { const p = this.room.peers(); if (Array.isArray(p)) return (this.peers = p); } catch (_) { /* on garde la dernière */ }
+      }
+      return this.peers;
+    }
 
     /* ------------------------------------------------------------------ salon */
 
@@ -129,7 +142,7 @@
      *  La plateforme retire un pair dès qu'il s'en va, donc la seule présence suffit à le compter :
      *  `updatedAt` ne bouge qu'au changement, il ne dirait rien d'un joueur prêt qui attend sans agir. */
     members(table) {
-      return this.peers
+      return this.livePeers()
         .filter((p) => p.kind === 'viewer' && p.presence && p.presence.v === PROTO
                        && p.presence.t === table && p.presence.pid)
         .slice()
@@ -146,7 +159,7 @@
     /** Tables ouvertes, pour la liste du salon. */
     tables() {
       const by = new Map();
-      for (const p of this.peers) {
+      for (const p of this.livePeers()) {
         const q = p.presence;
         if (p.kind !== 'viewer' || !q || q.v !== PROTO || !q.t) continue;
         if (!by.has(q.t)) by.set(q.t, { code: q.t, mode: q.m, game: q.g, players: [], playing: false });

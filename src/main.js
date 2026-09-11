@@ -101,6 +101,9 @@
     coop: { mode: 'coop', game: 'run', name: 'COOP 2v2', desc: ['À deux contre', 'la machine · rogue lite'] },
   };
   const formulaOf = (mode) => FORMULAS[mode] || FORMULAS.duel;
+  // Sur claude.ai le salon ne relie que des spectateurs connectés au même compte : pour jouer avec
+  // qui l'on veut, il faut la page publique, où deux navigateurs se parlent directement.
+  const PUBLIC_URL = 'brunodrapi.github.io/Botminton';
   const netSettings = { formula: 'duel' };
 
   function pickRow(el, defs, current, onPick, off) {
@@ -125,13 +128,23 @@
     for (const id of ['netMode', 'netName', 'netTables', 'netCreate', 'netHint']) $(id).classList.toggle('hidden', dead);
     $('netCode').parentElement.classList.toggle('hidden', dead);
     for (const h of $('online').querySelectorAll('h2')) h.classList.toggle('hidden', dead);
-    if (dead) { st.textContent = 'Indisponible sur cette page'; return; }
+    if (dead) {
+      st.textContent = 'Indisponible sur cette page';
+      $('netWhy').innerHTML = net.onClaude
+        ? `Sur claude.ai, le jeu en ligne ne relie que des spectateurs <b>connectés au même compte</b>.
+           Pour jouer avec quelqu\u2019un d\u2019autre, ouvrez tous les deux <b>${PUBLIC_URL}</b> :
+           là, les deux navigateurs se parlent directement.`
+        : `Ce navigateur ne sait pas ouvrir de connexion directe : il n\u2019y a aucun moyen
+           d\u2019atteindre un autre joueur d\u2019ici.`;
+      return;
+    }
     st.textContent = netBusy || (net.kind === 'room'
-      ? `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`
+      ? `${net.livePeers().filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`
       : 'Connexion directe entre navigateurs');
     // Sans annuaire, on ne peut pas lister les tables : on échange le code de vive voix.
-    $('netHint').textContent = net.canBrowse()
-      ? ''
+    $('netHint').innerHTML = net.canBrowse()
+      ? `Ici, seules les personnes connectées au même compte peuvent te rejoindre. Pour jouer avec
+         n\u2019importe qui, ouvrez tous les deux <b>${PUBLIC_URL}</b>.`
       : 'Crée une table, donne son code à l\u2019autre joueur — il le saisit ci-dessus.';
     $('netTables').classList.toggle('hidden', !net.canBrowse());
     $('netCreate').disabled = !!netBusy;
@@ -511,9 +524,13 @@
 
   /* ---------------------------------------------------------------- boucle */
   let last = performance.now();
+  let lobbyBeat = 0;
   function frame(now) {
     const dt = Math.min(0.05, (now - last) / 1000);
     last = now;
+    // Le salon se relit tout seul quatre fois par seconde : la liste des présents peut changer sans
+    // qu'un évènement l'annonce, et un joueur seul devant un salon muet ne sait pas quoi en penser.
+    if (now - lobbyBeat > 250) { lobbyBeat = now; if (net.table) { renderLobby(); renderOnline(); } }
     const inp = input.consume();
     if (net.state === 'playing' && !net.isHost()) {
       // Invité : on ne tranche rien, on prolonge la simulation et on rejoue ce que l'hôte annonce.

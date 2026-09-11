@@ -262,6 +262,29 @@ const idle = () => ({ stick: { x: 0, y: 0 }, held: {}, just: [] });
   // n'arrive, et où le jeu avait l'air simplement cassé.
   check('un hôte muet se voit à l\u2019écran', b.status() === 'INVITÉ' && (b.lastSnapAt -= 5000, b.status() === 'LIAISON PERDUE'), b.status());
 
+  // Celui qui ouvre une table doit se voir dans son propre salon, même si aucun évènement ne vient
+  // le lui annoncer : seul dans la salle, rien ne bouge, donc rien ne déclenche d'évènement. Le
+  // salon restait alors « en attente d'un joueur » sur les deux places, la sienne comprise.
+  {
+    const solo = new Map();
+    const muet = new Net();
+    muet.room = {
+      presence(patch) {
+        const cur = solo.get('moi') || {};
+        for (const k in patch) { if (patch[k] === null) delete cur[k]; else cur[k] = patch[k]; }
+        solo.set('moi', cur);
+        return Promise.resolve();
+      },
+      // L'accesseur dit la vérité tout de suite ; aucun évènement n'est jamais délivré.
+      peers: () => [...solo].map(([k, v]) => ({ peer: k, kind: 'viewer', presence: v, isMe: true, sameTab: true })),
+      onPeers() {}, onConnection() {}, connected: () => true,
+    };
+    muet.create('duel', 'exhib', 'balanced', 'SEUL');
+    check('celui qui ouvre la table occupe sa place sans attendre d\u2019évènement',
+      muet.members(muet.table).length === 1 && muet.mySlot() === 0, `${muet.members(muet.table).length} place(s)`);
+    check('et sa table apparaît comme la sienne', (muet.tables()[0] || {}).players.some((x) => x.me));
+  }
+
   // Un joueur qui ne se reconnaît pas dans la table ne doit prendre aucune place ni lancer la partie.
   const lost = new Net();
   wire(lost, 'moi');
