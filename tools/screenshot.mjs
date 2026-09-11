@@ -27,7 +27,10 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url);
 await page.waitForTimeout(400);
 if (process.env.DIFF) await page.evaluate((d) => { const s = window.__rogueShuttle.settings; s.difficulty = d; s.startLevel = ['rookie', 'pro', 'elite', 'boss'].indexOf(d); }, process.env.DIFF);
+await page.screenshot({ path: `${out}/0-accueil.png` });
+await page.mouse.click(195, 400); await page.waitForTimeout(250);   // on quitte l'écran d'accueil
 await page.screenshot({ path: `${out}/1-menu.png` });
+await page.click('#soloBtn'); await page.waitForTimeout(200);
 await page.click('#playBtn');
 await page.waitForTimeout(200);
 await page.click('#chassisGo');
@@ -83,7 +86,10 @@ for (let i = 0; i < 40; i++) {
 console.log('captured', JSON.stringify(shots));
 // paysage
 const page2 = await browser.newPage({ viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
-await page2.goto(url); await page2.click('#playBtn'); await page2.waitForTimeout(300);
+await page2.goto(url); await page2.waitForTimeout(400);
+await page2.mouse.click(420, 200); await page2.waitForTimeout(200);
+await page2.click('#soloBtn'); await page2.waitForTimeout(150);
+await page2.click('#playBtn'); await page2.waitForTimeout(300);
 await page2.screenshot({ path: `${out}/5-landscape.png` });
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close();

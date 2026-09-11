@@ -214,12 +214,10 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('le coup rétrogradé tombe quand même où il est visé', Math.abs(tooFar.z - tooFar.aim.z) < 0.9,
     `visé ${tooFar.aim.z.toFixed(2)} → ${tooFar.z.toFixed(2)}`);
 
-  // Frapper du mauvais côté interdit le coup parfait.
-  const wrong = play('A', 'neutre', 0, -0.9);
-  const right = play('A', 'neutre', 0, 0.9);
-  check('le bon côté de raquette autorise le coup parfait', right.level === 2, String(right.level));
-  check('le mauvais côté de raquette plafonne le coup', wrong.level <= 1, String(wrong.level));
-  check('le revers reprend le volant côté gauche', play('B', 'neutre', 0, -0.9).level === 2);
+  // Dans l'échange, les deux boutons frappent des deux côtés : on ne choisit plus son geste.
+  for (const btn of ['A', 'B']) for (const [sx, cote] of [[-0.9, 'gauche'], [0.9, 'droite']])
+    check(`${btn} reprend le volant côté ${cote}`, play(btn, 'neutre', 0, sx).level === 2,
+      String(play(btn, 'neutre', 0, sx).level));
 }
 
 // Le service : la pression fige, le relâchement engage, et les règles du carré sont tenues.
@@ -236,6 +234,45 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   p.hold = { btn: 'A', t0: g.time - 0.62 };
   g.update(1 / 60, { stick: { x: 1, y: 0 }, held: {}, just: [] });
   check('le relâchement engage le service', g.state === 'rally' && !p.hold, `état ${g.state}`);
+}
+// La visée du service est calée sur la boîte : à maintien plein on touche la ligne, au-delà on sort.
+{
+  const g = new RS.Game();
+  g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+  g.score = [0, 0]; g.server = g.player; g.setupServe();
+  const p = g.player, b = g.serveBoxSign, plein = 0.08 + 0.55;
+  const t = (ux, uz, held) => g.serveTarget(p, ux, uz, held === undefined ? plein : held);
+  check('visée pleine vers le filet : la ligne de service court',
+    Math.abs(Math.abs(t(0, -1).z) - P.COURT.shortService) < 0.02, t(0, -1).z.toFixed(2));
+  check('visée pleine vers le fond : la ligne de fond',
+    Math.abs(Math.abs(t(0, 1).z) - P.COURT.halfLength) < 0.02, t(0, 1).z.toFixed(2));
+  check('visée pleine vers l\u2019extérieur : la ligne de côté',
+    Math.abs(Math.abs(t(b, 0).x) - P.COURT.halfWidthSingles) < 0.02, t(b, 0).x.toFixed(2));
+  check('visée pleine vers l\u2019intérieur : la ligne médiane', Math.abs(t(-b, 0).x) < 0.02, t(-b, 0).x.toFixed(2));
+  check('sans maintien on vise le milieu de la boîte',
+    g.inServiceBox(t(0, 0, 0).x, t(0, 0, 0).z), `${t(0, 0, 0).x.toFixed(2)},${t(0, 0, 0).z.toFixed(2)}`);
+  // En double la boîte est plus large et moins profonde : la visée suit.
+  const gd = new RS.Game();
+  gd.startExhibition({ chassis: 'balanced', difficulty: 'rookie', doubles: true });
+  gd.score = [0, 0]; gd.server = gd.player; gd.setupServe();
+  check('en double la visée pleine touche la ligne de service long',
+    Math.abs(Math.abs(gd.serveTarget(gd.player, 0, 1, plein).z) - P.COURT.longServiceDoubles) < 0.02);
+
+  // Le bouton choisit le geste : le revers passe plus bas et arrive plus vite.
+  const hauteur = (btn) => {
+    let sum = 0;
+    for (let i = 0; i < 60; i++) {
+      const q = new RS.Game();
+      q.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+      q.score = [0, 0]; q.server = q.player; q.setupServe();
+      q.serve(q.player, btn, q.serveTarget(q.player, 0, 1, q.heldFor(q.player, 0.5)));
+      sum += q.pred.netY;
+    }
+    return sum / 60;
+  };
+  const droit = hauteur('A'), rev = hauteur('B');
+  check('le revers sert plus tendu que le coup droit', rev < droit - 0.6,
+    `${rev.toFixed(2)} m contre ${droit.toFixed(2)} m au filet`);
 }
 
 // Carré de service : à droite quand le score est pair, à gauche quand il est impair, et en diagonale.
@@ -354,9 +391,9 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   const aimBefore = g.spreadF(g.player, 0.3); g.takeCard('legs');
   check('legs card speeds up aiming', g.spreadF(g.player, 0.3) > aimBefore,
     `${aimBefore.toFixed(2)} → ${g.spreadF(g.player, 0.3).toFixed(2)}`);
-  const noise = g.spreadOf(g.player, 1, true); g.takeRacket('precision');
-  check('racket precision tightens the spread', g.spreadOf(g.player, 1, true) < noise,
-    `${noise.toFixed(2)} → ${g.spreadOf(g.player, 1, true).toFixed(2)}`);
+  const noise = g.spreadOf(g.player, 1); g.takeRacket('precision');
+  check('racket precision tightens the spread', g.spreadOf(g.player, 1) < noise,
+    `${noise.toFixed(2)} → ${g.spreadOf(g.player, 1).toFixed(2)}`);
   const reach = g.reachOf(g.player); g.takeRacket('reach');
   check('racket lengthens reach', g.reachOf(g.player) > reach);
   const [w0, w1] = g.hitWindow(g.player); g.takeRacket('window');

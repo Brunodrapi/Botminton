@@ -28,13 +28,12 @@ part **au relâchement**, vers la cible atteinte. La raquette balaie aussitôt :
 
 | Entrée | Action |
 | --- | --- |
-| **A** | **Coup droit** — le volant se prend à droite du robot |
-| **B** | **Revers** — le volant se prend à gauche du robot |
+| **A** / **B** | **Frapper** — dans l'échange les deux font la même chose, le côté suit le volant |
+| **A** / **B** au service | **Coup droit** (haut, sûr) ou **revers** (tendu, au ras de la bande) |
 | Croix ▲ / ▼ | La mire glisse vers le **fond** / vers le **filet** |
 | Croix ◀ / ▶ | La mire glisse vers la **ligne de côté** ; les diagonales visent les coins |
 | Durée du maintien | 0,2 s = déjà à mi-chemin du bord, 0,63 s = la ligne, au-delà de 0,8 s = **dehors** |
 | Tempo de la frappe | Décide de la **précision** : bien calé le volant va chercher la ligne, mal calé il part n'importe où |
-| Mauvais côté de raquette | Coup parfait interdit, dispersion × 1,5, mention *COUP DROIT FORCÉ* / *REVERS FORCÉ* |
 | A ou B en pleine course, volant hors de portée | **Plongeon** : détente avec allonge, remise haute, puis 0,67 s au sol |
 | Service | Mêmes règles, la mire restant dans la boîte de service adverse |
 | Clavier | Flèches / ZQSD, `A` (ou X, espace) et `B` (ou C), `Échap` = pause |
@@ -145,7 +144,8 @@ Le dernier niveau tire au sort un handicap qui vaut pour ses 15 points :
 
 - **Visée glissante** : après un temps mort de 0,08 s, la visée quitte le centre du camp adverse. Elle s'en écarte d'un coup — à 0,2 s elle a déjà fait la moitié du chemin — puis freine : il faut 0,63 s pour être exactement sur la ligne, et insister jusqu'à 0,8 s pour la franchir. Un appui bref décale donc nettement, mais aller chercher le bord se mérite.
 - **Le tempo décide de la précision** : sur une même visée, un coup parfait tombe à 16 cm de la cible et reste dans le court neuf fois sur dix ; un coup correct à 53 cm ; un coup faible à 1,29 m, et il sort trois fois sur dix. Le cordage tendu resserre cette dispersion jusqu'à − 90 %.
-- **Coup droit / revers** : le point idéal est décalé de 28 cm du côté de la raquette. Frapper du mauvais côté plafonne la qualité à OK et élargit la dispersion de moitié.
+- **Côté de frappe** : le point idéal est décalé de 28 cm du côté d'où arrive le volant — on frappe à côté de soi, pas à travers. Dans l'échange ce côté est choisi tout seul : il n'y a pas de mauvais bouton. Coup droit et revers ne se distinguent qu'au service, où l'on a le temps de choisir.
+- **Boîte de service** : la visée y est calée exactement — à maintien plein on vise la ligne, au-delà on est dehors. Le bot, lui, garde de la marge et ne fait pas de faute de service.
 - **Fenêtre de contact** : le geste dure 0,30 s et ne touche qu'entre 0,04 s et 0,20 s. C'est là que se joue le timing.
 - **Qualité = placement** : point idéal 35 cm devant le robot. FAIBLE / OK / PARFAIT. Une frappe faible est molle et part n'importe où.
 - **Jauge SUPER** : monte sur les coups bien placés (+3 pour un parfait), les smashs (+3), les sauts (+2) et les sauvetages (+5). Pleine, le robot s'auréole et son prochain smash devient un **SUPER SMASH** foudroyant qui vide la jauge.

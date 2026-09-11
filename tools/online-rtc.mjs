@@ -51,6 +51,9 @@ const mk = async (tag) => {
   page.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/ERR_CONNECTION_RESET|favicon/.test(m.text())) errors.push(`${tag}: ${m.text()}`); });
   await page.goto(url);
+  await page.waitForTimeout(400);
+  await page.mouse.click(195, 400);      // l'écran d'accueil précède le menu
+  await page.waitForTimeout(200);
   return page;
 };
 const A = await mk('A'), B = await mk('B');

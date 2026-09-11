@@ -31,7 +31,7 @@
   const r2 = (v) => Math.round(v * 100) / 100;
 
   const SWEET = 0.35;          // le point idéal de frappe est 35 cm devant le robot
-  const STROKE_OFF = 0.28;     // le point idéal se décale du côté de la raquette (coup droit) ou de l'autre (revers)
+  const STROKE_OFF = 0.28;     // le point idéal se décale du côté où arrive le volant : on frappe à côté de soi
   // Visée : une pression courte envoie au centre du camp adverse, un maintien fait glisser
   // la cible vers le bord choisi à la croix, jusqu'à sortir du terrain.
   const TAP_TIME = 0.08;
@@ -217,27 +217,37 @@
       if (u >= 1) return Math.min(SPREAD_MAX, 1 + (u - 1) * SPREAD_OUT);
       return 1 - Math.pow(1 - u, SPREAD_EASE);
     }
+    /** Durée de maintien qu'il faut tenir pour amener la visée à la fraction `f` du bord. Inverse de
+     *  `spreadF` : le bot dit où il vise, pas combien de temps il appuierait. */
+    heldFor(r, f) {
+      const t = SPREAD_TIME * (1 - 0.18 * this.cardLv(r, 'legs'));
+      return TAP_TIME + t * (1 - Math.pow(1 - clamp(f, 0, 0.999), 1 / SPREAD_EASE));
+    }
+
     /** Cible d'un coup d'échange : centre du camp adverse, décalée vers le bord choisi. */
     rallyTarget(r, ux, uz, held) {
       const far = -r.side, f = this.spreadF(r, held);
       return { x: ux * f * AIM_SPAN_X, z: far * (AIM_DEPTH + uz * f * AIM_SPAN_Z), f };
     }
-    /** Cible d'un service : même principe, centré sur la boîte de service adverse. */
+    /** Cible d'un service : même principe, mais calée exactement sur la boîte de service adverse —
+     *  à visée pleine on touche la ligne, au-delà on est dehors. Sans cela le service court maintenu
+     *  tombait systématiquement devant la ligne de service, une faute qu'on ne pouvait pas voir venir. */
     serveTarget(r, ux, uz, held) {
       const far = -r.side, f = this.spreadF(r, held), b = this.serveBoxSign;
-      return { x: b * 1.3 + ux * f * 1.25, z: far * (4.0 + uz * f * 2.15), f };
+      const back = this.doubles ? COURT.longServiceDoubles : COURT.halfLength;
+      const mid = (COURT.shortService + back) / 2, span = (back - COURT.shortService) / 2;
+      const w = (this.doubles ? COURT.halfWidthDoubles : COURT.halfWidthSingles) / 2;
+      return { x: b * w + ux * f * w, z: far * (mid + uz * f * span), f };
     }
     /** Dispersion attendue, en mètres : elle dépend du placement et du cordage. */
-    spreadOf(r, level, good) {
+    spreadOf(r, level) {
       const base = SPREAD_BY_LEVEL[level];
       const k = r.isAI ? this.diff.aimNoise : Math.max(0.1, 1 - 0.3 * this.racketLv(r, 'precision'));
-      return base * k * (good ? 1 : 1.5);
+      return base * k;
     }
-    /** Le volant est-il du côté de la raquette ? A = coup droit (à droite), B = revers (à gauche). */
-    goodStroke(r, btn) {
-      const d = this.shuttle.x - r.x;
-      return btn === 'B' ? d < 0.15 : d > -0.15;
-    }
+    /** De quel côté le robot tend le bras : celui d'où vient le volant. Dans l'échange le joueur n'a
+     *  pas à le choisir — il n'aurait pas le temps — c'est la position du volant qui décide. */
+    strokeSide(r) { return this.shuttle.x < r.x ? -1 : 1; }
     /** Famille de trajectoire déduite de la cible et de la hauteur du volant. */
     familyFor(y, tz) {
       const depth = Math.abs(tz);
@@ -392,8 +402,11 @@
         if (srv.isAI) {
           this.serveTimer -= dt;
           if (this.serveTimer <= 0) {                       // le bot vise court ou long, un peu au hasard
-            const uz = Math.random() < 0.45 ? -1 : 1, ux = rnd(-1, 1);
-            this.serve(srv, 'A', this.serveTarget(srv, ux, uz, TAP_TIME + SPREAD_TIME * rnd(0.45, 0.85)));
+            // Le bot vise franchement dans la boîte, pas sur la ligne : il sert court ou long,
+            // un peu de côté, en gardant de la marge. Les lignes, c'est le risque du joueur.
+            const uz = Math.random() < 0.45 ? -1 : 1, ux = rnd(-0.8, 0.8);
+            this.serve(srv, Math.random() < 0.5 ? 'A' : 'B',
+                       this.serveTarget(srv, ux, uz, this.heldFor(srv, rnd(0.25, 0.75))));
           }
         }
       } else if (this.state === 'rally') {
@@ -642,12 +655,15 @@
     serve(srv, btn, target) {
       const s = this.shuttle;
       const depth = Math.abs(target.z);
-      const spread = this.spreadOf(srv, 2, true) * 0.6;
+      const spread = this.spreadOf(srv, 2) * 0.6;
       const tgt = { x: target.x + rnd(-spread, spread), z: target.z + rnd(-spread, spread) };
       // Court : trajectoire tendue qui rase la bande. Long : cloche qui retombe au fond.
+      // Et c'est là que le bouton compte : le revers sert au ras de la bande — le receveur a moins
+      // de temps, mais la marge au filet est mince — quand le coup droit lève et laisse de l'air.
       const long = depth > 4.6;
-      const spec = { mode: 'angle', angle: long ? 58 : depth > 3.2 ? 40 : 22, target: tgt,
-                     clearance: long ? 1.0 : 0.14, from: { x: s.x, y: s.y, z: s.z } };
+      const tight = btn === 'B';
+      const spec = { mode: 'angle', angle: (long ? 58 : depth > 3.2 ? 40 : 22) + (tight ? -4 : 5), target: tgt,
+                     clearance: (long ? 1.0 : 0.16) * (tight ? 0.55 : 1.6), from: { x: s.x, y: s.y, z: s.z } };
       const plan = P.planShot(spec);
       s.vx = plan.v.vx; s.vy = plan.v.vy; s.vz = plan.v.vz; s.t = 0;
       s.px = s.x; s.py = s.y; s.pz = s.z;
@@ -674,7 +690,7 @@
         else if (age < w0 || age > w1) continue;                   // hors de la fenêtre de contact
         if (s.z * r.side < -0.25) { a.lastD = null; continue; }
         // Le point idéal se décale du côté de la raquette : coup droit à droite, revers à gauche.
-        const sweetX = r.x + (a.btn === 'B' ? -STROKE_OFF : STROKE_OFF);
+        const sweetX = r.x + this.strokeSide(r) * STROKE_OFF;
         const sweetZ = r.z - r.side * SWEET;
         const d = Math.hypot(s.x - sweetX, s.z - sweetZ);
         const dr = Math.hypot(s.x - r.x, s.z - r.z);
@@ -701,18 +717,16 @@
       const late = r.netLag ? Math.min(0.55, this.speedOf(r) * r.netLag * 0.8) : 0;
       const wide = 0.09 * this.racketLv(r, 'window') + late;
       const place = d <= 0.55 + wide ? 2 : d <= 1.0 + wide ? 1 : 0;
-      const good = a.dive || this.goodStroke(r, a.btn);
-      let level = good ? place : Math.min(place, 1);     // frapper du mauvais côté interdit le coup parfait
+      let level = place;
       if (r.isAI) level = this.aiLevel(level);
 
       // La cible visée reçoit sa dispersion : c'est elle qui décide de la famille de trajectoire.
-      const spread = this.spreadOf(r, level, good);
+      const spread = this.spreadOf(r, level);
       const tx = clamp(a.target.x + rnd(-spread, spread), -3.6, 3.6);
       const tz = a.target.z + rnd(-spread, spread);
       let shot = a.dive ? 'clear' : this.familyFor(s.y, tz);
       let note = null;
       if (a.dive) { level = Math.min(level, 1); note = 'SAUVETAGE!'; }
-      else if (!good) note = a.btn === 'B' ? 'REVERS FORCÉ' : 'COUP DROIT FORCÉ';
 
       // La trajectoire est calculée avant d'être nommée : c'est elle qui dit si le coup est jouable.
       const planFor = (kind, lv, sup) => {

@@ -455,8 +455,10 @@
     const serving = game.state === 'serve' && game.server === p;
     if (serving !== lastServing) {
       lastServing = serving;
-      $('hintA').innerHTML = serving ? 'SERVICE<br>coup droit' : 'COUP DROIT';
-      $('hintB').innerHTML = serving ? 'SERVICE<br>revers' : 'REVERS';
+      // Coup droit et revers ne se choisissent qu'au service. Dans l'échange, les deux boutons
+      // frappent pareil : c'est la position du volant qui décide du côté.
+      $('hintA').innerHTML = serving ? 'SERVICE<br>coup droit' : 'FRAPPER';
+      $('hintB').innerHTML = serving ? 'SERVICE<br>revers' : 'FRAPPER';
       $('padHint').innerHTML = serving
         ? '▲ long &nbsp;▼ court &nbsp;◀▶ côté<br>maintenir = vers le bord'
         : '▲ fond &nbsp;▼ filet &nbsp;◀▶ côté<br>maintenir = vers la ligne';
