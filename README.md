@@ -67,10 +67,27 @@ On crée une table ou on en rejoint une dans la liste ; chacun choisit son châs
 le match part quand les deux le sont. En coop, **chaque joueur a son propre deck** : à chaque palier
 vous choisissez chacun votre carte et la manche repart une fois que les deux ont choisi.
 
-Le jeu en ligne passe par la capacité `room` des Artifacts claude.ai : il réunit les personnes de la
-même organisation qui ont **la page ouverte au même moment**, et rien n'est conservé — fermer la page
-ferme la table. Ailleurs (GitHub Pages, fichier local), le bouton reste visible mais annonce que le
-mode n'est pas disponible, et les modes solo fonctionnent normalement.
+#### Deux transports, selon l'hébergement
+
+| Page | Transport | Comment on se trouve |
+| --- | --- | --- |
+| Artifact **claude.ai** | capacité `room` | Les tables ouvertes s'affichent ; il faut avoir partagé la page et être plusieurs à l'avoir ouverte en même temps |
+| **GitHub Pages**, fichier local | **WebRTC** | Tu crées une table, tu donnes son code à quatre lettres, l'autre le saisit |
+
+Dans les deux cas les données de jeu ne transitent par aucun serveur de jeu : sur claude.ai c'est la
+plateforme qui les relaie, en WebRTC elles vont directement d'un appareil à l'autre. Rien n'est
+conservé — fermer la page ferme la table.
+
+En WebRTC, un **annuaire** public (le broker PeerJS) sert uniquement à présenter les deux navigateurs
+l'un à l'autre au moment de rejoindre ; il ne voit jamais une seule frappe. C'est un service gratuit :
+il peut être lent ou indisponible, et le jeu le dit alors au lieu d'attendre. Et faute de serveur de
+relais, deux réseaux très fermés peuvent ne jamais réussir à se joindre directement.
+
+Pour pointer son propre serveur de signalisation, poser avant le chargement du jeu :
+
+```html
+<script>window.ROGUE_SHUTTLE_RTC = { peer: { host: 'exemple.net', port: 443, path: '/', secure: true } };</script>
+```
 
 L'aide « zone d'arrivée du volant » du menu équivaut au premier niveau de la carte Optique prédictive.
 
@@ -139,7 +156,8 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 - `src/sprites.js` — atlas embarqués : RG-B1 (héros), BW-01 (Rookie), RG-02 (Pro), RG-03 (Elite), ZG-04 (Boss), générés par `tools/extract_sprites.py` depuis `assets/*-sheet.png`.
 - `src/input.js` — croix directionnelle fixe 8 directions, boutons A/B (Pointer Events), clavier.
 - `src/audio.js` — sons synthétiques WebAudio.
-- `src/net.js` — jeu en ligne : salon, élection de l'hôte, instantanés et entrées, le tout sur la présence de la capacité `room`.
+- `src/net.js` — jeu en ligne : salon, élection de l'hôte, instantanés et entrées. Il ignore quel transport le porte.
+- `src/room-rtc.js` — le transport de secours : même surface que la capacité `room`, au-dessus de WebRTC, pour les pages hébergées hors de claude.ai.
 - `src/main.js` — menus, HUD, boucle.
 
 ```bash
@@ -147,8 +165,9 @@ node tests/physics.test.mjs   # le solveur atterrit où on lui demande
 node tests/match.test.mjs     # matchs complets simulés, simple et double, cartes et paliers
 node tests/net.test.mjs       # un hôte et un invité, latence simulée : l'invité doit rester collé
 NETDEBUG=1 NETLAG=9 node tests/net.test.mjs   # détaille les points et durcit la latence
-node tools/online.mjs /tmp/shots              # deux navigateurs jouent l'un contre l'autre
+node tools/online.mjs /tmp/shots              # deux navigateurs jouent l'un contre l'autre (transport claude.ai simulé)
 MODE=coop node tools/online.mjs /tmp/shots    # …en coop 2v2, donc en rogue lite
+node tools/online-rtc.mjs /tmp/shots          # …en WebRTC, comme sur GitHub Pages
 node build.mjs                # dist/index.html mono-fichier (CSS + JS inclus)
 python3 tools/extract_sprites.py   # régénère l'atlas de sprites (Pillow + numpy)
 ```

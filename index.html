@@ -88,7 +88,7 @@
         <li><b>Jauge SUPER</b> : elle monte sur les coups bien placés, les smashs et les sauvetages. Pleine, ton robot s'auréole et son prochain smash devient un <b>SUPER SMASH</b> qui vide la jauge.</li>
         <li><b>Run</b> : 4 niveaux de <b>15 points</b>. Dès que l'un des deux atteint 5 puis 10, tu choisis entre <b>3 cartes</b>, cumulables 3 fois. À 15, le bot devant arrête la run ; toi devant, une carte de plus, un <b>modificateur de raquette</b>, et l'adversaire suivant.</li>
         <li>Le <b>boss</b> impose un protocole tiré au sort : volant survolté, servos bridés, image monochrome ou sépia, terrain à l'envers, panne de lumière ou lignes effacées.</li>
-        <li><b>EN LIGNE</b> : crée une table ou rejoins-en une. <b>Duel 1v1</b> : chacun son camp, match libre en 15 points. <b>Coop 2v2</b> : à deux du même côté contre deux machines, en rogue lite. Tu joues avec les gens qui ont cette page ouverte en même temps que toi.</li>
+        <li><b>EN LIGNE</b> : crée une table, donne son code à quatre lettres, l'autre le saisit. <b>Duel 1v1</b> : chacun son camp, match libre en 15 points. <b>Coop 2v2</b> : à deux du même côté contre deux machines, en rogue lite.</li>
         <li>En <b>coop rogue lite</b>, chacun a ses propres cartes : à chaque palier vous choisissez chacun la vôtre et la manche repart quand les deux ont choisi.</li>
         <li>Clavier : flèches / ZQSD pour bouger, <b>A</b> (ou X, espace) et <b>B</b> (ou C).</li>
       </ul>
@@ -103,11 +103,9 @@
       <p class="tag" id="onlineState">Connexion…</p>
 
       <div id="netOffline" class="hidden">
-        <p class="tag note-big">Le jeu en ligne n'existe que sur la page publiée <b>claude.ai</b> : c'est
-        elle qui réunit les joueurs. Sur GitHub Pages ou en local, la page n'a personne à qui parler.</p>
-        <p class="tag note-big">Sur claude.ai, il faut aussi <b>partager la page</b> pour que quelqu'un
-        d'autre puisse l'ouvrir, et être plusieurs à l'avoir ouverte <b>en même temps</b>.</p>
-        <p class="tag note-big">Les modes <b>ROGUE LITE</b> et <b>EXHIBITION</b> fonctionnent ici sans rien de tout ça.</p>
+        <p class="tag note-big">Ce navigateur ne sait pas ouvrir de connexion directe, et la page n'est
+        pas hébergée sur claude.ai : il n'y a aucun moyen d'atteindre un autre joueur d'ici.</p>
+        <p class="tag note-big">Les modes <b>ROGUE LITE</b> et <b>EXHIBITION</b> fonctionnent sans rien de tout ça.</p>
       </div>
 
       <h2>Formule</h2>
@@ -115,8 +113,14 @@
       <h2>Ton nom</h2>
       <input id="netName" class="field" maxlength="10" placeholder="PILOTE" autocomplete="off" spellcheck="false">
 
-      <h2>Tables ouvertes</h2>
+      <h2>Rejoindre une table</h2>
+      <div class="join-row">
+        <input id="netCode" class="field code" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false"
+               autocapitalize="characters" inputmode="text">
+        <button id="netJoin" class="ghost">REJOINDRE</button>
+      </div>
       <div class="choices" id="netTables"></div>
+      <p class="tag" id="netHint"></p>
       <button id="netCreate" class="primary">CRÉER UNE TABLE</button>
       <button id="netBack" class="ghost">Retour</button>
     </div>
@@ -198,6 +202,7 @@
 <script src="src/render.js"></script>
 <script src="src/input.js"></script>
 <script src="src/audio.js"></script>
+<script src="src/room-rtc.js"></script>
 <script src="src/net.js"></script>
 <script src="src/main.js"></script>
 </body>

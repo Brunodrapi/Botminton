@@ -7,6 +7,9 @@
  *
  * Un joueur héberge : il simule la partie et publie l'état complet. Les autres publient leurs
  * entrées et rejouent l'état reçu. Rien n'est conservé : si la page se recharge, la table disparaît.
+ *
+ * Hors de claude.ai la capacité n'existe pas : on retombe alors sur `RoomRTC`, qui offre la même
+ * surface au-dessus de WebRTC. La couche ci-dessous ne sait pas lequel des deux la porte.
  */
 (function (root) {
   'use strict';
@@ -49,14 +52,23 @@
       this.sentAt = {};          // numéro d'instantané → date d'envoi, pour mesurer l'aller-retour
       this.lastEvent = 0;
       this.phase = null;         // 'choose' pendant le choix des cartes, 'ready' une fois choisi
+      this.kind = null;          // 'room' sur claude.ai, 'rtc' partout ailleurs
+      this.rtc = null;
     }
 
-    /** Se connecte si la plateforme le permet. Résout false hors de claude.ai : le jeu reste solo. */
+    /** Le transport propose-t-il un annuaire des tables ouvertes ? Seul `room` le peut. */
+    canBrowse() { return this.kind === 'room'; }
+
+    /** Se connecte au meilleur transport disponible : la capacité `room` sur claude.ai, sinon WebRTC.
+     *  Résout false quand aucun des deux n'est possible — le jeu reste alors purement solo. */
     async connect() {
       if (this.room) return true;
-      if (typeof root.claude === 'undefined' || !root.claude || typeof root.claude.use !== 'function') return false;
       let r = null;
-      try { r = await root.claude.use('room'); } catch (_) { r = null; }
+      if (root.claude && typeof root.claude.use === 'function') {
+        try { r = await root.claude.use('room'); } catch (_) { r = null; }
+      }
+      if (r) this.kind = 'room';
+      else if (root.RoomRTC && root.RoomRTC.available()) { r = this.rtc = new root.RoomRTC(); this.kind = 'rtc'; }
       if (!r) return false;
       this.room = r;
       r.onPeers((change) => {
@@ -125,23 +137,55 @@
     mySlot() { return Math.max(0, this.members(this.table).findIndex((p) => p.peer === this.myPeer)); }
     seats() { return SEATS[this.mode] || 2; }
 
-    create(mode, game, chassis, name) {
+    /** Ouvre une table. En WebRTC il faut d'abord prendre le code auprès de l'annuaire : si le code
+     *  est déjà pris on en retire un autre, et on remonte l'échec plutôt que d'ouvrir un salon mort. */
+    async create(mode, game, chassis, name) {
       this.mode = mode; this.game = game; this.chassis = chassis; this.name = name;
-      this.table = newCode(); this.ready = false; this.state = 'lobby';
-      this.push();
-      return this.table;
+      this.ready = false; this.state = 'lobby'; this.error = null;
+      for (let i = 0; i < 4; i++) {
+        const code = newCode();
+        if (!this.rtc) { this.table = code; this.push(); return code; }
+        try { await this.rtc.claim(code, true); this.table = code; this.push(); return code; }
+        catch (e) {
+          if (String(e.message) !== 'code déjà pris') { this.state = 'off'; this.error = e.message; throw e; }
+        }
+      }
+      this.state = 'off'; this.error = 'annuaire saturé';
+      throw new Error(this.error);
     }
 
-    join(code, chassis, name) {
+    async join(code, chassis, name) {
       const t = this.tables().find((x) => x.code === code);
       if (t) { this.mode = t.mode; this.game = t.game; }
-      this.table = code; this.chassis = chassis; this.name = name; this.ready = false; this.state = 'lobby';
+      this.chassis = chassis; this.name = name; this.ready = false; this.state = 'lobby'; this.error = null;
+      if (this.rtc) {
+        try { await this.rtc.claim(code, false); }
+        catch (e) { this.state = 'off'; this.error = e.message; throw e; }
+      }
+      this.table = code;
       this.push();
+      // En WebRTC la formule vient de l'hôte : on l'adopte dès que sa présence arrive.
+      return code;
+    }
+
+    /** La formule annoncée par l'hôte fait foi : l'invité s'y range. */
+    adoptHost() {
+      const m = this.members(this.table);
+      const h = m[0] && m[0].presence;
+      if (!h || m[0].peer === this.myPeer) return false;
+      if ((h.m && h.m !== this.mode) || (h.g && h.g !== this.game)) {
+        this.mode = h.m || this.mode; this.game = h.g || this.game;
+        this.push();
+        return true;
+      }
+      return false;
     }
 
     leave() {
       this.table = null; this.ready = false; this.state = 'off'; this.map = null; this.flip = false;
       if (this.room) this.room.presence({ v: null, t: null, m: null, g: null, ch: null, nm: null, rd: null, st: null, s: null, i: null, dk: null }).catch(() => {});
+      // Une table WebRTC n'existe que par sa connexion : on la referme en partant.
+      if (this.rtc) { this.rtc.close(); this.rtc.error = null; }
     }
 
     setReady(v) { this.ready = !!v; this.push(); }

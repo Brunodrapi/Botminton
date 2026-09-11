@@ -137,13 +137,13 @@
       return c;
     }
 
-    /** Copie unie de l'atlas : sert à faire briller un robot (jauge pleine, visée sur la ligne). */
-    silhouette(sheet, rgb) {
+    /** Copie blanche de l'atlas : sert à faire briller un robot dont la jauge SUPER est pleine. */
+    silhouette(sheet) {
       const a = this.atlases[sheet];
       if (!a) return null;
-      const key = rgb ? 'glow' + rgb.join('') : 'glow';
+      const key = 'glow';
       if (a[key]) return a[key];
-      const col = rgb || [255, 255, 245];
+      const col = [255, 255, 245];
       const c = document.createElement('canvas'); c.width = a.img.width; c.height = a.img.height;
       const ctx = c.getContext('2d');
       ctx.drawImage(a.img, 0, 0);
@@ -484,10 +484,8 @@
       const { name, flip } = this.robotPose(r, game);
       const src = this.tinted(sheet, r.tint ? r.color : null);
       const sy = p.y - jump - bob;
-      const aim = game.aimF(r);
-      // La visée ne se dessine plus dans le camp adverse : c'est le robot qui prévient. Il clignote
-      // en blanc quand la visée atteint la ligne, en rouge quand elle l'a franchie — relâche avant.
-      const aimOut = aim > 1 && r === game.player && game.currentAim && (game.currentAim() || {}).out;
+      // Jauge SUPER pleine : aura discrète. La visée, elle, ne s'affiche nulle part — jusqu'où on
+      // peut tenir avant de sortir est une chose que le joueur apprend en jouant.
       if (r.energy >= RS.MAX_ENERGY) {
         const g = this.silhouette(sheet);
         b.save(); b.globalAlpha = 0.18 + 0.14 * Math.sin(this.time * 7);
@@ -495,12 +493,6 @@
         b.restore();
       }
       this.drawSprite(sheet, name, p.x, sy, flip, src);
-      if (aim >= 1 && Math.floor(this.time * (aimOut ? 16 : 12)) % 2) {
-        const g = this.silhouette(sheet, aimOut ? [248, 88, 88] : null);
-        b.save(); b.globalAlpha = aimOut ? 0.9 : 0.75;
-        this.drawSprite(sheet, name, p.x, sy, flip, g);
-        b.restore();
-      }
     }
 
     text(str, x, y, color, size, center, outline) {

@@ -245,19 +245,6 @@
       if (depth >= 5.0) return 'clear';
       return y >= SMASH_H ? 'smash' : 'drive';
     }
-    /** Visée courante du joueur, pour l'afficher pendant qu'il maintient le bouton. */
-    currentAim() {
-      const p = this.player, h = p.hold;
-      if (!h) return null;
-      const held = this.time - h.t0;
-      const serving = this.state === 'serve' && this.server === p;
-      const t = serving ? this.serveTarget(p, p.aimX, p.dirZ, held) : this.rallyTarget(p, p.aimX, p.dirZ, held);
-      const far = -p.side;
-      // Au service la mire doit rester dans la boîte adverse : trop à l'intérieur, elle franchit la ligne médiane.
-      const out = Math.abs(t.x) > COURT.halfWidthSingles || Math.abs(t.z) > COURT.halfLength || t.z * far <= 0.35
-        || (serving && (Math.abs(t.z) < COURT.shortService || t.x * this.serveBoxSign <= 0));
-      return { x: t.x, z: t.z, f: t.f, out, spread: this.spreadOf(p, 1, true), btn: h.btn };
-    }
     jumpReach(r) { return JUMP_REACH + 0.25 * this.cardLv(r, 'thruster'); }
     /** Fenêtre de contact. Un joueur distant la reçoit un peu plus large : sa frappe a voyagé,
      *  et la gigue du réseau ne doit pas lui coûter des volants qu'il avait bien lus. */
@@ -324,6 +311,24 @@
     /** Abscisse du carré de service d'un robot : son camp et son côté donnent la place. */
     courtX(r) { return -r.side * r.court * 1.1; }
 
+    /** Limites du carré de service d'un robot, dans son propre camp. Tant que le service n'est pas
+     *  parti, serveur et receveur y sont tenus : c'est ce qui donne son sens à l'obligation de croiser. */
+    serveZone(r) {
+      const w = (this.doubles ? COURT.halfWidthDoubles : COURT.halfWidthSingles) - 0.12;
+      const back = (this.doubles ? COURT.longServiceDoubles : COURT.halfLength) - 0.12;
+      const sx = Math.sign(this.courtX(r)) || 1;
+      const zA = r.side * (COURT.shortService + 0.12), zB = r.side * back;
+      return { x0: sx > 0 ? 0.14 : -w, x1: sx > 0 ? w : -0.14,
+               z0: Math.min(zA, zB), z1: Math.max(zA, zB) };
+    }
+
+    /** Le robot est-il tenu à son carré de service ? Seuls le serveur et son vis-à-vis le sont. */
+    penned(r) {
+      if (this.state !== 'serve' || !this.server) return false;
+      if (r === this.server) return true;
+      return this.teamOf(r) !== this.teamOf(this.server) && r.court === this.server.court;
+    }
+
     setupServe() {
       const srv = this.server, st = this.teamOf(srv);
       this.servedLast[st] = srv;
@@ -331,8 +336,12 @@
       srv.court = this.score[st] % 2 === 0 ? 1 : -1;
       const mate = this.partner(srv);
       if (mate) mate.court = -srv.court;
+      const foes = this.foes(srv);
+      // En simple, l'unique receveur suit le serveur : il se place toujours en diagonale de lui.
+      // En double la paire receveuse garde ses places — elle a déjà un robot dans chaque carré.
+      if (foes.length === 1) foes[0].court = srv.court;
       // Le receveur est celui qui fait face au serveur en diagonale : même `court`, camp opposé.
-      const rcv = this.foes(srv).find((r) => r.court === srv.court) || this.foes(srv)[0];
+      const rcv = foes.find((r) => r.court === srv.court) || foes[0];
       for (const r of this.robots) { r.vx = r.vz = 0; r.hold = r.act = null; r.dive = null; }
       for (const r of this.robots) {
         r.x = this.courtX(r);
@@ -509,11 +518,6 @@
       return !!(r.act && !r.act.dive && this.time - r.act.t0 <= SWING_PLANT);
     }
 
-    /** Avancement de la visée pendant le maintien (0 au centre, 1 sur la ligne), ou −1 si le robot ne vise pas. */
-    aimF(r) {
-      return r.hold ? this.spreadF(r, this.time - r.hold.t0) : -1;
-    }
-
     /** Lance un coup de raquette. Il ne touchera que si le volant passe dans sa fenêtre de contact. */
     startSwing(r, opt) {
       const far = -r.side;
@@ -616,6 +620,14 @@
       r.x = clamp(r.x + r.vx * dt, -3.4, 3.4);
       const zNear = r.side * 0.45, zFar = r.side * 7.6;
       r.z = clamp(r.z + r.vz * dt, Math.min(zNear, zFar), Math.max(zNear, zFar));
+      // Au service, on ne sort pas de son couloir : ni le serveur, ni celui qui lui fait face.
+      if (this.penned(r)) {
+        const z = this.serveZone(r);
+        const nx = clamp(r.x, z.x0, z.x1), nz = clamp(r.z, z.z0, z.z1);
+        if (nx !== r.x) r.vx = 0;
+        if (nz !== r.z) r.vz = 0;
+        r.x = nx; r.z = nz;
+      }
       r.walk += Math.hypot(r.vx, r.vz) * dt * 2.2;
     }
 
@@ -1062,7 +1074,11 @@
 
     resolveLanding() {
       const s = this.shuttle;
-      const hitter = this.lastHitter, mine = this.teamOf(hitter), theirs = 1 - mine;
+      const hitter = this.lastHitter;
+      // Un volant qui touche le sol sans que personne l'ait frappé n'est le point de personne :
+      // on remet simplement l'échange en place.
+      if (!hitter) { this.setupServe(); return; }
+      const mine = this.teamOf(hitter), theirs = 1 - mine;
       const landSide = s.z < 0 ? -1 : 1;
       if (!this.inCourt(s.x, s.z)) this.endPoint(theirs, 'OUT');
       else if (landSide === hitter.side) this.endPoint(theirs, 'RATÉ');

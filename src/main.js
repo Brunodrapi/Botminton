@@ -120,18 +120,22 @@
   function renderOnline() {
     if ($('online').classList.contains('hidden')) return;
     const st = $('onlineState');
-    const dead = !net.room && !!net.error;       // la capacité n'existe pas ici : inutile de faire semblant
-    const waiting = !net.room && !net.error;
-    // Hors de claude.ai, on explique au lieu de laisser un bouton grisé sans raison.
+    const dead = !net.room;                      // aucun transport ici : inutile de faire semblant
     $('netOffline').classList.toggle('hidden', !dead);
-    for (const id of ['netMode', 'netName', 'netTables', 'netCreate']) $(id).classList.toggle('hidden', dead);
+    for (const id of ['netMode', 'netName', 'netTables', 'netCreate', 'netHint']) $(id).classList.toggle('hidden', dead);
+    $('netCode').parentElement.classList.toggle('hidden', dead);
     for (const h of $('online').querySelectorAll('h2')) h.classList.toggle('hidden', dead);
     if (dead) { st.textContent = 'Indisponible sur cette page'; return; }
-    st.textContent = waiting ? 'Connexion…'
-      : !net.connected() ? 'Reconnexion…'
-      : `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`;
-    $('netCreate').disabled = waiting;
-    $('netCreate').style.opacity = waiting ? 0.45 : 1;
+    st.textContent = netBusy || (net.kind === 'room'
+      ? `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`
+      : 'Connexion directe entre navigateurs');
+    // Sans annuaire, on ne peut pas lister les tables : on échange le code de vive voix.
+    $('netHint').textContent = net.canBrowse()
+      ? ''
+      : 'Crée une table, donne son code à l\u2019autre joueur — il le saisit ci-dessus.';
+    $('netTables').classList.toggle('hidden', !net.canBrowse());
+    $('netCreate').disabled = !!netBusy;
+    $('netCreate').style.opacity = netBusy ? 0.45 : 1;
     pickRow($('netMode'), FORMULAS, netSettings.formula, (k) => { netSettings.formula = k; renderOnline(); });
     const tables = net.room ? net.tables().filter((t) => !t.players.some((p) => p.me)) : [];
     $('netTables').innerHTML = tables.length ? tables.map((t) => {
@@ -145,21 +149,38 @@
     for (const b of $('netTables').querySelectorAll('.choice[data-code]')) {
       b.addEventListener('click', () => {
         if (b.hasAttribute('disabled')) return;
-        sfx.unlock();
-        settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
-        net.join(b.dataset.code, settings.chassis, settings.name);
-        showLobby();
+        enterTable(() => net.join(b.dataset.code, settings.chassis, settings.name), 'Connexion à la table…');
       });
     }
   }
 
+  let netBusy = '';
   async function showOnline() {
     showPanel('online');
     $('netName').value = settings.name || '';
+    netBusy = 'Connexion…';
     renderOnline();
-    const ok = await net.connect();
-    if (!ok) net.error = net.error || 'not_granted';
+    await net.connect();
+    netBusy = '';
     renderOnline();
+  }
+
+  /** Ouvre ou rejoint une table, en montrant ce qui se passe : l'annuaire peut être lent. */
+  async function enterTable(run, busy) {
+    if (netBusy) return;
+    sfx.unlock();
+    settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
+    netBusy = busy;
+    renderOnline();
+    try {
+      await run();
+      netBusy = '';
+      showLobby();
+    } catch (e) {
+      netBusy = '';
+      renderOnline();
+      $('onlineState').textContent = String((e && e.message) || e);
+    }
   }
 
   function showLobby() {
@@ -169,10 +190,12 @@
 
   function renderLobby() {
     if ($('lobby').classList.contains('hidden') || !net.table) return;
+    if (net.adoptHost()) { /* la formule de l'hôte fait foi */ }
     const members = net.members(net.table);
     const seats = net.seats();
     $('lobbyCode').textContent = net.table;
-    $('lobbySub').textContent = formulaOf(net.mode).name + (net.isHost() ? ' · tu héberges' : '');
+    $('lobbySub').textContent = formulaOf(net.mode).name
+      + (net.isHost() ? (net.canBrowse() ? ' · tu héberges' : ' · donne ce code à l\u2019autre joueur') : '');
     const rows = [];
     for (let i = 0; i < seats; i++) {
       const m = members[i];
@@ -326,12 +349,16 @@
   $('netBack').addEventListener('click', () => showPanel('menu'));
   $('netCreate').addEventListener('click', () => {
     if (!net.room) return;
-    sfx.unlock();
-    settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
     const f = formulaOf(netSettings.formula);
-    net.create(f.mode, f.game, settings.chassis, settings.name);
-    showLobby();
+    enterTable(() => net.create(f.mode, f.game, settings.chassis, settings.name), 'Ouverture de la table…');
   });
+  const joinTyped = () => {
+    const code = ($('netCode').value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 4);
+    if (!net.room || code.length < 4) return;
+    enterTable(() => net.join(code, settings.chassis, settings.name), `Recherche de la table ${code}…`);
+  };
+  $('netJoin').addEventListener('click', joinTyped);
+  $('netCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') joinTyped(); });
   $('netName').addEventListener('change', () => {
     settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
     if (net.table) { net.name = settings.name; net.push(); }

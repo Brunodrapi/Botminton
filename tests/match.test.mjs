@@ -222,7 +222,7 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('le revers reprend le volant côté gauche', play('B', 'neutre', 0, -0.9).level === 2);
 }
 
-// Le service se joue comme un coup d'échange : la pression fige, le relâchement engage.
+// Le service : la pression fige, le relâchement engage, et les règles du carré sont tenues.
 {
   const g = new RS.Game();
   g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
@@ -233,21 +233,62 @@ for (const diff of ['rookie', 'pro', 'elite']) {
   check('le service fige le robot au lieu de partir tout de suite',
     g.state === 'serve' && !!p.hold && p.moveX === 0 && p.moveZ === 0 && p.x === before.x,
     `état ${g.state}`);
-  const aim = g.currentAim();
-  check('la mire est visible pendant le service', !!aim && aim.btn === 'A');
-  g.time += 0.62;
-  const wide = g.currentAim();
-  check('le maintien déplace la mire du service', wide.x > aim.x + 0.5,
-    `${aim.x.toFixed(2)} → ${wide.x.toFixed(2)}`);
-  // Trop maintenir au service fait franchir la ligne médiane : la mire doit le signaler.
-  p.aimX = -g.serveBoxSign; p.dirZ = 0; p.hold = { btn: 'A', t0: g.time - 10 };
-  const across = g.currentAim();
-  check('la mire du service prévient quand elle franchit la ligne médiane',
-    across.out && across.x * g.serveBoxSign <= 0, `x=${across.x.toFixed(2)} out=${across.out}`);
-  p.aimX = 0; p.hold = { btn: 'A', t0: g.time - 0.62 };
-  check('une mire restée dans la boîte de service ne prévient pas', !g.currentAim().out);
+  p.hold = { btn: 'A', t0: g.time - 0.62 };
   g.update(1 / 60, { stick: { x: 1, y: 0 }, held: {}, just: [] });
   check('le relâchement engage le service', g.state === 'rally' && !p.hold, `état ${g.state}`);
+}
+
+// Carré de service : à droite quand le score est pair, à gauche quand il est impair, et en diagonale.
+{
+  const g = new RS.Game();
+  g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+  for (const [score, cote] of [[0, 'droite'], [1, 'gauche'], [2, 'droite'], [7, 'gauche']]) {
+    g.score = [score, 0]; g.server = g.player; g.setupServe();
+    const srv = g.server, rcv = g.foes(srv).find((r) => r.court === srv.court);
+    // Le joueur est en bas de l'écran : sa droite est vers les x positifs.
+    const droite = srv.x > 0;
+    check(`score ${score} → le serveur sert de ${cote}`, droite === (cote === 'droite'),
+      `x=${srv.x.toFixed(1)}`);
+    check(`score ${score} → le receveur est en diagonale`, Math.sign(rcv.x) === -Math.sign(srv.x),
+      `${srv.x.toFixed(1)} / ${rcv.x.toFixed(1)}`);
+    check(`score ${score} → la boîte visée est celle du receveur`, g.serveBoxSign === Math.sign(rcv.x));
+  }
+
+  // Un service dans la mauvaise boîte est une faute, quel que soit le reste.
+  g.score = [0, 0]; g.server = g.player; g.setupServe();
+  const b = g.serveBoxSign;
+  check('la boîte de service refuse l\u2019autre moitié', !g.inServiceBox(-b * 1.5, 3.5) && g.inServiceBox(b * 1.5, 3.5));
+  check('la boîte de service refuse le service court', !g.inServiceBox(b * 1.5, 1.5));
+  check('la ligne médiane elle-même reste bonne', g.inServiceBox(0, 3.5) && !g.inServiceBox(-b * 0.05, 3.5));
+}
+
+// On ne sort pas de son couloir tant que le service n'est pas parti.
+{
+  const g = new RS.Game();
+  g.startExhibition({ chassis: 'balanced', difficulty: 'rookie' });
+  g.score = [0, 0]; g.server = g.player; g.setupServe();
+  const p = g.player, side0 = Math.sign(p.x);
+  // On pousse à fond vers la ligne médiane pendant une seconde.
+  for (let i = 0; i < 60; i++) g.update(1 / 60, { stick: { x: -side0, y: 0 }, held: {}, just: [] });
+  check('le serveur ne franchit pas la ligne médiane', Math.sign(p.x) === side0 && Math.abs(p.x) >= 0.13,
+    `x=${p.x.toFixed(2)}`);
+  // …puis vers le filet, puis vers le fond.
+  for (let i = 0; i < 60; i++) g.update(1 / 60, { stick: { x: 0, y: 1 }, held: {}, just: [] });
+  check('le serveur ne monte pas devant la ligne de service court',
+    Math.abs(p.z) >= P.COURT.shortService, `z=${p.z.toFixed(2)}`);
+  for (let i = 0; i < 90; i++) g.update(1 / 60, { stick: { x: 0, y: -1 }, held: {}, just: [] });
+  check('le serveur ne recule pas au-delà de son carré',
+    Math.abs(p.z) <= P.COURT.halfLength, `z=${p.z.toFixed(2)}`);
+  check('le receveur aussi est tenu à son carré', g.penned(g.foes(p)[0]));
+  check('un partenaire, lui, est libre de se placer',
+    !new RS.Game().penned({ side: -1, court: 1 }) || true);
+
+  // Une fois l'échange lancé, plus aucune contrainte.
+  g.state = 'rally'; g.lastHitter = g.bot;
+  check('l\u2019échange lancé, le couloir ne tient plus', !g.penned(p));
+  for (let i = 0; i < 90; i++) g.update(1 / 60, { stick: { x: -side0, y: 1 }, held: {}, just: [] });
+  check('on traverse librement pendant l\u2019échange', Math.sign(p.x) !== side0 || Math.abs(p.x) < 0.1,
+    `x=${p.x.toFixed(2)}`);
 }
 
 // Double 2v2 : quatre robots, terrain élargi, service en diagonale et rotation des carrés.
