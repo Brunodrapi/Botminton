@@ -147,8 +147,11 @@
     const step = game.nextStep();
     const list = isCard ? game.offerCards() : game.offerRackets();
     if (!list.length) { afterChoice(kind); return; }
-    $('choiceTitle').textContent = isCard ? `${step} POINTS` : 'NIVEAU FRANCHI';
-    $('choiceSub').textContent = isCard ? 'Choisis une pièce à monter' : 'Choisis un modificateur de raquette';
+    const ahead = game.score[0] >= game.score[1];
+    $('choiceTitle').textContent = isCard ? `PALIER ${RS.fmtScore(step)}` : 'NIVEAU FRANCHI';
+    $('choiceSub').textContent = isCard
+      ? `${ahead ? 'Tu mènes' : 'Le bot mène'} ${RS.fmtScore(game.score[0])} – ${RS.fmtScore(game.score[1])} · choisis une pièce`
+      : 'Choisis un modificateur de raquette';
     const owned = isCard ? game.run.cards : game.run.racket;
     $('choiceList').innerHTML = list.map((u) => {
       const n = (owned[u.key] || 0) + 1;
@@ -230,7 +233,7 @@
     $('scoreBot').classList.toggle('long', bot.length > 2);
     $('stage').textContent = game.run.solo
       ? `EXHIBITION · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`
-      : `NIVEAU ${game.run.level + 1} · ${RS.fmtScore(game.score[0])} / ${RS.LEVEL_TARGET}`;
+      : `NIVEAU ${game.run.level + 1} · PALIER ${RS.fmtScore(game.nextStep())}`;
     const p = game.player, b = game.bot;
     setHeat(heatBars.you, p.energy); setHeat(heatBars.bot, b.energy);
     heatPct.textContent = p.energy.toFixed(0) + '%';

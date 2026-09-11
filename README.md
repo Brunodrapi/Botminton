@@ -41,9 +41,9 @@ L'aide « zone d'arrivée du volant » du menu équivaut au premier niveau de la
 
 | Étape | Contenu |
 | --- | --- |
-| Niveau | **15 points** contre le même adversaire, score cumulé. Le bot à 15 arrête la run |
-| Paliers de 5 et 10 points | Choix entre **3 cartes**, cumulables **3 fois** chacune |
-| 15ᵉ point | Une carte **et** un modificateur de raquette, puis l'adversaire suivant |
+| Niveau | **15 points** contre le même adversaire, score cumulé |
+| Paliers de 5 et 10 | Déclenchés dès que **l'un des deux** les atteint : choix entre **3 cartes**, cumulables **3 fois**. Un palier franchi par le bot te donne donc une carte de rattrapage |
+| 15 points | Le bot devant, la run s'arrête. Toi devant, une carte de plus, un modificateur de raquette, puis l'adversaire suivant |
 | Difficulté | Le bot gagne 4 % de vitesse à chaque palier franchi |
 
 ### Protocole du boss

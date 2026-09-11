@@ -770,9 +770,11 @@
       this.events.push({ type: 'point', winner: idx, reason });
     }
 
+    /** −1 : on continue. 0 : palier franchi (carte). 1 : le bot a fait 15, la run s'arrête. */
     matchWinner() {
       if (this.score[1] >= LEVEL_TARGET) return 1;
-      if (this.score[0] >= this.nextStep()) return 0;
+      // Le palier tombe dès que l'un des deux l'atteint : une carte de rattrapage si le bot mène.
+      if (Math.max(this.score[0], this.score[1]) >= this.nextStep()) return 0;
       return -1;
     }
 

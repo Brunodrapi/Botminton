@@ -82,9 +82,22 @@ for (const diff of ['rookie', 'pro', 'elite']) {
 // Rogue lite : paliers de cartes tous les 5 points, run perdue si le bot atteint 15
 {
   const g = new RS.Game(); g.startRun({ chassis: 'balanced' });
-  g.score = [4, 3]; check('4-3 not a card step', g.matchWinner() === -1);
-  g.score = [5, 3]; check('5 points reaches a card step', g.matchWinner() === 0);
-  g.score = [2, 15]; check('bot at 15 ends the run', g.matchWinner() === 1);
+  g.score = [4, 4]; check('4-4 not a card step', g.matchWinner() === -1);
+  g.score = [5, 3]; check('player at 5 reaches a card step', g.matchWinner() === 0);
+  g.score = [3, 5]; check('bot at 5 also reaches a card step', g.matchWinner() === 0);
+  g.run.stage = 2;
+  g.score = [14, 14]; check('14-14 not decided', g.matchWinner() === -1);
+  g.score = [15, 9]; check('player at 15 wins the level', g.matchWinner() === 0);
+  g.score = [9, 15]; check('bot at 15 ends the run', g.matchWinner() === 1);
+
+  // Le bot qui franchit un palier donne quand même une carte de rattrapage au joueur
+  const h = new RS.Game(); h.startRun({ chassis: 'balanced' });
+  const seen = [];
+  h.score = [1, 5]; h.nextRally(); seen.push(h.phase); h.advance();
+  h.score = [3, 10]; h.nextRally(); seen.push(h.phase); h.advance();
+  h.score = [15, 12]; h.nextRally(); seen.push(h.phase + (h.pendingRacket ? '+raquette' : '')); h.advance();
+  check('les paliers du bot donnent aussi une carte', seen.join(' ') === 'cards cards cards+raquette', seen.join(' '));
+  check('le niveau gagné passe à l\'adversaire suivant', h.run.level === 1 && h.score[0] === 0 && h.score[1] === 0, `${h.diff.key} ${h.score.join('-')}`);
 }
 
 // Progression de la run : 3 manches par niveau, cartes après chacune, raquette à la troisième
