@@ -82,17 +82,16 @@ const mk = async (tag) => {
 };
 const A = await mk('A'), B = await mk('B');
 
+// Une seule formule à choisir : DUEL 1v1 (exhibition) ou COOP 2v2 (rogue lite).
 const MODE = process.env.MODE || 'duel';
-const GAME = process.env.GAMEMODE || 'exhib';
 
 // --- A ouvre le menu en ligne et crée une table ---
 await A.click('#onlineBtn'); await A.waitForTimeout(500);
 await A.click(`#netMode .card >> nth=${MODE === 'coop' ? 1 : 0}`);
-await A.click(`#netGame .card >> nth=${GAME === 'run' ? 1 : 0}`);
 await A.fill('#netName', 'ALICE');
 await A.click('#netCreate'); await A.waitForTimeout(400);
 const code = (await A.textContent('#lobbyCode')).trim();
-console.log('table créée :', code, '·', MODE, GAME);
+console.log('table créée :', code, '·', MODE);
 
 // --- B rejoint ---
 await B.click('#onlineBtn'); await B.waitForTimeout(600);

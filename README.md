@@ -49,21 +49,23 @@ Le joueur ne choisit pas un type de coup : il choisit un point de chute, et la t
 
 - **Rogue lite** : choix du châssis, puis les 4 adversaires à la suite, avec les cartes et le protocole du boss.
 - **Exhibition** : choix du châssis, puis de l'adversaire, pour un match libre en 15 points sans carte ni protocole.
-- **En ligne** : duel 1v1 en match libre, ou coop 2v2 en match libre comme en rogue lite.
+- **En ligne** : duel 1v1 en match libre, ou coop 2v2 en rogue lite.
 
 ### En ligne
 
-| Formule | Terrain | Qui joue | Épreuves |
+Deux formules, pas davantage — il n'y a qu'une seule chose à choisir.
+
+| Formule | Terrain | Qui joue | Épreuve |
 | --- | --- | --- | --- |
-| **Duel 1v1** | Simple | Deux humains, un par camp | Exhibition |
-| **Coop 2v2** | Double | Deux humains d'un côté, deux machines de l'autre | Exhibition · rogue lite |
+| **Duel 1v1** | Simple | Deux humains, un par camp | Match libre en 15 points |
+| **Coop 2v2** | Double | Deux humains d'un côté, deux machines de l'autre | Rogue lite, 4 niveaux |
 
 Le rogue lite se joue contre la machine : en solo, ou à deux du même côté. Un duel entre deux humains
 n'a pas de camp adverse à faire progresser, c'est donc un match libre.
 
 On crée une table ou on en rejoint une dans la liste ; chacun choisit son châssis, se déclare prêt, et
-le match part quand les deux le sont. En coop rogue lite, **chaque joueur a son propre deck** : à
-chaque palier vous choisissez chacun votre carte et la manche repart une fois que les deux ont choisi.
+le match part quand les deux le sont. En coop, **chaque joueur a son propre deck** : à chaque palier
+vous choisissez chacun votre carte et la manche repart une fois que les deux ont choisi.
 
 Le jeu en ligne passe par la capacité `room` des Artifacts claude.ai : il réunit les personnes de la
 même organisation qui ont **la page ouverte au même moment**, et rien n'est conservé — fermer la page
@@ -146,7 +148,7 @@ node tests/match.test.mjs     # matchs complets simulés, simple et double, cart
 node tests/net.test.mjs       # un hôte et un invité, latence simulée : l'invité doit rester collé
 NETDEBUG=1 NETLAG=9 node tests/net.test.mjs   # détaille les points et durcit la latence
 node tools/online.mjs /tmp/shots              # deux navigateurs jouent l'un contre l'autre
-MODE=coop GAMEMODE=run node tools/online.mjs  # …en coop 2v2 et en rogue lite
+MODE=coop node tools/online.mjs /tmp/shots    # …en coop 2v2, donc en rogue lite
 node build.mjs                # dist/index.html mono-fichier (CSS + JS inclus)
 python3 tools/extract_sprites.py   # régénère l'atlas de sprites (Pillow + numpy)
 ```

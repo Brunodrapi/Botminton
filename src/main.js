@@ -94,17 +94,14 @@
   }
 
   /* ---------------------------------------------------------------- en ligne */
-  const MODE_DESC = {
-    duel: { name: 'DUEL 1v1', desc: ['Deux robots', 'chacun son camp'] },
-    coop: { name: 'COOP 2v2', desc: ['À deux contre', 'deux machines'] },
+  // Deux formules, pas davantage : le rogue lite se joue contre la machine, donc un duel entre
+  // deux humains est forcément un match libre, et jouer à deux du même côté appelle la run.
+  const FORMULAS = {
+    duel: { mode: 'duel', game: 'exhib', name: 'DUEL 1v1', desc: ['Chacun son camp', 'match en 15 points'] },
+    coop: { mode: 'coop', game: 'run', name: 'COOP 2v2', desc: ['À deux contre', 'la machine · rogue lite'] },
   };
-  const GAME_DESC = {
-    exhib: { name: 'EXHIBITION', desc: ['Un match', 'en 15 points'] },
-    run: { name: 'ROGUE LITE', desc: ['4 niveaux', 'avec les cartes'] },
-  };
-  // Le rogue lite se joue contre la machine : en solo, ou à deux du même côté. Un duel reste un match libre.
-  const RUN_MODES = ['coop'];
-  const netSettings = { mode: 'duel', game: 'exhib' };
+  const formulaOf = (mode) => FORMULAS[mode] || FORMULAS.duel;
+  const netSettings = { formula: 'duel' };
 
   function pickRow(el, defs, current, onPick, off) {
     el.innerHTML = '';
@@ -127,7 +124,7 @@
     const waiting = !net.room && !net.error;
     // Hors de claude.ai, on explique au lieu de laisser un bouton grisé sans raison.
     $('netOffline').classList.toggle('hidden', !dead);
-    for (const id of ['netMode', 'netGame', 'netName', 'netTables', 'netCreate']) $(id).classList.toggle('hidden', dead);
+    for (const id of ['netMode', 'netName', 'netTables', 'netCreate']) $(id).classList.toggle('hidden', dead);
     for (const h of $('online').querySelectorAll('h2')) h.classList.toggle('hidden', dead);
     if (dead) { st.textContent = 'Indisponible sur cette page'; return; }
     st.textContent = waiting ? 'Connexion…'
@@ -135,18 +132,14 @@
       : `${net.peers.filter((p) => p.kind === 'viewer').length} personne(s) sur cette page`;
     $('netCreate').disabled = waiting;
     $('netCreate').style.opacity = waiting ? 0.45 : 1;
-    // Le rogue lite demande un camp adverse tenu par la machine : il n'existe donc pas en duel.
-    if (RUN_MODES.indexOf(netSettings.mode) < 0) netSettings.game = 'exhib';
-    pickRow($('netMode'), MODE_DESC, netSettings.mode, (k) => { netSettings.mode = k; renderOnline(); });
-    pickRow($('netGame'), GAME_DESC, netSettings.game, (k) => { netSettings.game = k; renderOnline(); },
-            RUN_MODES.indexOf(netSettings.mode) < 0 ? ['run'] : null);
+    pickRow($('netMode'), FORMULAS, netSettings.formula, (k) => { netSettings.formula = k; renderOnline(); });
     const tables = net.room ? net.tables().filter((t) => !t.players.some((p) => p.me)) : [];
     $('netTables').innerHTML = tables.length ? tables.map((t) => {
       const full = t.players.length >= 2 || t.playing;
       return `<button class="choice" data-code="${t.code}" ${full ? 'disabled style="opacity:.5"' : ''}>
         <span class="ico">${t.mode === 'coop' ? '🤝' : '⚔️'}</span>
-        <span class="txt"><span class="nm">${t.code} · ${MODE_DESC[t.mode] ? MODE_DESC[t.mode].name : t.mode}</span>
-        <span class="ds">${GAME_DESC[t.game] ? GAME_DESC[t.game].name : t.game} · ${t.players.map((p) => p.name || 'PILOTE').join(', ')}${full ? ' · complet' : ''}</span></span>
+        <span class="txt"><span class="nm">${t.code} · ${formulaOf(t.mode).name}</span>
+        <span class="ds">${t.players.map((p) => p.name || 'PILOTE').join(', ')}${full ? ' · complet' : ''}</span></span>
       </button>`;
     }).join('') : '<p class="tag">Aucune table pour l\u2019instant — crée la tienne.</p>';
     for (const b of $('netTables').querySelectorAll('.choice[data-code]')) {
@@ -179,8 +172,7 @@
     const members = net.members(net.table);
     const seats = net.seats();
     $('lobbyCode').textContent = net.table;
-    $('lobbySub').textContent = `${MODE_DESC[net.mode].name} · ${GAME_DESC[net.game].name}`
-      + (net.isHost() ? ' · tu héberges' : '');
+    $('lobbySub').textContent = formulaOf(net.mode).name + (net.isHost() ? ' · tu héberges' : '');
     const rows = [];
     for (let i = 0; i < seats; i++) {
       const m = members[i];
@@ -336,7 +328,8 @@
     if (!net.room) return;
     sfx.unlock();
     settings.name = ($('netName').value || '').toUpperCase().slice(0, 10); saveSettings();
-    net.create(netSettings.mode, netSettings.game, settings.chassis, settings.name);
+    const f = formulaOf(netSettings.formula);
+    net.create(f.mode, f.game, settings.chassis, settings.name);
     showLobby();
   });
   $('netName').addEventListener('change', () => {
