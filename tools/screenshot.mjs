@@ -28,7 +28,7 @@ await page.goto(url);
 await page.waitForTimeout(400);
 if (process.env.DIFF) await page.evaluate((d) => { const s = window.__rogueShuttle.settings; s.difficulty = d; s.startLevel = ['rookie', 'pro', 'elite', 'boss'].indexOf(d); }, process.env.DIFF);
 await page.screenshot({ path: `${out}/0-accueil.png` });
-await page.mouse.click(195, 400); await page.waitForTimeout(250);   // on quitte l'écran d'accueil
+await page.keyboard.press('Enter'); await page.waitForTimeout(250);   // on quitte l'écran d'accueil
 await page.screenshot({ path: `${out}/1-menu.png` });
 await page.click('#soloBtn'); await page.waitForTimeout(200);
 await page.click('#playBtn');

@@ -204,5 +204,72 @@ const idle = () => ({ stick: { x: 0, y: 0 }, held: {}, just: [] });
     Math.hypot(guest.shuttle.x - host.shuttle.x, guest.shuttle.z - host.shuttle.z) < 1.2);
 }
 
+// -------------------------------------------------- places et hôte : un seul arbitre, deux places
+// Ce que le joueur a vu casser : les deux écrans se croyaient le même joueur et personne n'arbitrait,
+// si bien qu'on pouvait courir mais qu'aucune frappe ne partait. La place ne doit donc jamais être
+// devinée — et quand on ne se reconnaît pas dans la table, on ne prend aucune place du tout.
+{
+  new Function(readFileSync(new URL('../src/net.js', import.meta.url), 'utf8')).call(globalThis);
+  const Net = globalThis.RogueNet;
+
+  // Un salon minuscule, partagé : chacun voit sa présence et celle des autres.
+  const world = new Map();
+  const roomFor = (id) => ({
+    presence(patch) {
+      const cur = world.get(id) || {};
+      for (const k in patch) { if (patch[k] === null) delete cur[k]; else cur[k] = patch[k]; }
+      world.set(id, cur);
+      return Promise.resolve();
+    },
+    onPeers() {}, onConnection() {}, connected: () => true,
+  });
+  const wire = (n, id) => {
+    n.room = roomFor(id);
+    n.refresh = () => { n.peers = [...world].map(([k, v]) => ({ peer: k, kind: 'viewer', presence: v, isMe: k === id, sameTab: k === id })); };
+  };
+  const a = new Net(), b = new Net();
+  wire(a, 'zzz-arrive-en-dernier-dans-le-tri');   // l'hôte n'est plus celui dont l'étiquette trie en tête
+  wire(b, 'aaa-arrive-en-premier-dans-le-tri');
+  a.create('duel', 'exhib', 'balanced', 'A');
+  b.join('WXYZ', 'light', 'B');
+  b.table = a.table;
+  b.push();
+  a.refresh(); b.refresh();
+
+  check('celui qui ouvre la table héberge, quoi qu\u2019en dise le transport', a.isHost() && !b.isHost());
+  check('les deux places sont distinctes', a.mySlot() === 0 && b.mySlot() === 1);
+
+  a.setReady(true); b.setReady(true);
+  a.refresh(); b.refresh();
+  check('la table complète peut démarrer', a.canStart() && b.canStart());
+
+  a.begin(); b.begin();
+  const sa = a.seating(), sb = b.seating();
+  check('chacun se met en place 0 chez lui', !!sa.humans[0] && !!sb.humans[0]);
+  check('la correspondance est bien le miroir de l\u2019autre',
+    JSON.stringify(a.map) === '[0,1]' && JSON.stringify(b.map) === '[1,0]', `${JSON.stringify(a.map)} / ${JSON.stringify(b.map)}`);
+  check('un seul des deux arbitre, une fois lancé', a.isHost() !== b.isHost());
+
+  // La composition est figée : une présence qui s'éclipse ne change plus les rôles en cours de match.
+  const kept = world.get('zzz-arrive-en-dernier-dans-le-tri');
+  world.delete('zzz-arrive-en-dernier-dans-le-tri');
+  b.refresh();
+  check('un hoquet de présence ne fait pas changer d\u2019arbitre', !b.isHost() && b.mySlot() === 1);
+  check('et ne met pas fin à la partie', !b.lostPeers());
+  world.set('zzz-arrive-en-dernier-dans-le-tri', kept);
+
+  // Une liaison qui se tait se dit à l'écran : c'est exactement le cas où l'on court sans que rien
+  // n'arrive, et où le jeu avait l'air simplement cassé.
+  check('un hôte muet se voit à l\u2019écran', b.status() === 'INVITÉ' && (b.lastSnapAt -= 5000, b.status() === 'LIAISON PERDUE'), b.status());
+
+  // Un joueur qui ne se reconnaît pas dans la table ne doit prendre aucune place ni lancer la partie.
+  const lost = new Net();
+  wire(lost, 'moi');
+  lost.table = a.table;
+  lost.refresh();                                  // sa propre présence n'a jamais été publiée
+  check('sans identité publiée, aucune place n\u2019est prise', lost.mySlot() === -1);
+  check('et la partie ne se lance pas', !lost.canStart());
+}
+
 console.log(fails ? `\n${fails} test(s) failed` : '\nall good');
 process.exit(fails ? 1 : 0);

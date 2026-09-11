@@ -201,7 +201,7 @@
       const m = members[i];
       if (!m) { rows.push('<div class="seat empty"><span class="dot"></span><span class="who">En attente d\u2019un joueur…</span></div>'); continue; }
       const q = m.presence || {};
-      const mine = m.peer === net.myPeer;
+      const mine = m.presence.pid === net.pid;
       const camp = net.mode === 'coop' ? 'même camp' : (i === 0 ? 'camp du bas' : 'camp du haut');
       rows.push(`<div class="seat ${q.rd ? 'ok' : ''}"><span class="dot"></span>
         <span class="who">${(q.nm || 'PILOTE')}${mine ? ' (toi)' : ''}
@@ -217,8 +217,8 @@
 
   /** Les deux côtés composent la même partie : chacun se met en place 0, chez lui. */
   function startNetMatch() {
+    net.begin();                 // la composition est figée d'abord : c'est elle qui donne les places
     const seat = net.seating();
-    net.begin();
     handicapShown = null;
     const opts = { chassis: settings.chassis, assist: settings.assist, doubles: seat.doubles, humans: seat.humans };
     if (net.game === 'run') game.startRun(opts);
@@ -238,6 +238,7 @@
   let handicapShown = null;
   function beginRound() {
     $('chassisName').textContent = RS.CHASSIS[settings.chassis].name;
+    $('foeKind').textContent = 'BOT';
     $('diffName').textContent = game.diff.name;
     endShown = false;
     updateDeck();
@@ -446,7 +447,17 @@
       const mate = game.partner(p);
       $('chassisName').textContent = mate && !mate.isAI ? `+${mate.name || 'ALLIÉ'}` : RS.CHASSIS[settings.chassis].name;
       const foe = game.robots.find((r) => r.side > 0 && !r.isAI);
+      // En face d'un humain, ce n'est plus un bot : le dire évite de chercher qui est qui.
+      $('foeKind').textContent = foe ? 'FACE' : 'BOT';
       $('diffName').textContent = foe ? (foe.name || 'PILOTE') : game.diff.name;
+    }
+    // L'état de la liaison, en toutes lettres : sans lui une partie en ligne muette ressemble
+    // à une partie normale où l'on bouge sans que rien n'arrive jamais.
+    const tag = net.status();
+    $('netTag').classList.toggle('hidden', !tag);
+    if (tag) {
+      $('netTag').textContent = tag;
+      $('netTag').classList.toggle('bad', !/^(HÔTE|INVITÉ)/.test(tag));
     }
     heatPct.textContent = p.energy.toFixed(0) + '%';
     heatBars.you.classList.toggle('full', p.energy >= RS.MAX_ENERGY);

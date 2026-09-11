@@ -284,3 +284,13 @@ ul.help li { margin-bottom: 6px; }
 .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; margin: 14px 0 4px; font-size: 7px; }
 .stats b { float: right; font-weight: normal; }
 @media (prefers-reduced-motion: reduce) { .heat-bar.full i.on { animation: none; } }
+
+/* Étiquette réseau : discrète quand tout va bien, criarde quand la liaison lâche — l'invité doit
+   savoir que son robot bouge dans le vide plutôt que de croire le jeu cassé. */
+#netTag {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 2px;
+  font-size: 7px; letter-spacing: .08em; color: var(--cream-d);
+  background: rgba(12, 30, 51, .72); border-radius: var(--r-s);
+  padding: 2px 6px; pointer-events: none; white-space: nowrap;
+}
+#netTag.bad { color: #14314f; background: var(--amber); font-weight: 700; }

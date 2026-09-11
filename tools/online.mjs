@@ -3,7 +3,9 @@
 // même contrat (presence / peers / onPeers / connected), donc le jeu ne sait pas qu'il est en test.
 import { createRequire } from 'node:module';
 const require = createRequire(import.meta.url);
-const { chromium, devices } = require(process.env.PLAYWRIGHT_PATH || '/opt/node22/lib/node_modules/playwright');
+const pw = require(process.env.PLAYWRIGHT_PATH || '/opt/node22/lib/node_modules/playwright');
+// BROWSER=webkit rejoue la scène sur le moteur de Safari, celui des iPhone.
+const engine = pw[process.env.BROWSER || 'chromium'], devices = pw.devices;
 import { createServer } from 'node:http';
 import { readFileSync, existsSync, mkdirSync } from 'node:fs';
 import { extname, join } from 'node:path';
@@ -68,7 +70,7 @@ const FAKE_ROOM = `(() => {
   window.claude = { use: (n) => Promise.resolve(n === 'room' ? room : null) };
 })();`.replace('__LAG__', String(LAG));
 
-const browser = await chromium.launch();
+const browser = await engine.launch();
 const ctx = await browser.newContext({ ...devices['iPhone 13'], hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 await ctx.addInitScript(FAKE_ROOM);
 
@@ -78,9 +80,10 @@ const mk = async (tag) => {
   page.on('pageerror', (e) => errors.push(`${tag}: ${e}`));
   page.on('console', (m) => { if (m.type() === 'error' && !/ERR_CONNECTION_RESET/.test(m.text())) errors.push(`${tag}: ${m.text()}`); });
   await page.goto(url);
-  await page.waitForTimeout(400);
-  await page.mouse.click(195, 400);      // l'écran d'accueil précède le menu
-  await page.waitForTimeout(200);
+  // L'affiche est lourde : on attend que le jeu ait posé ses écouteurs avant d'appuyer.
+  await page.waitForFunction(() => !!window.__rogueShuttle);
+  await page.keyboard.press('Enter');      // l'écran d'accueil précède le menu
+  await page.waitForSelector('#menu:not(.hidden)');
   return page;
 };
 const A = await mk('A'), B = await mk('B');
