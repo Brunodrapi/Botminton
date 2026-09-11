@@ -1,9 +1,13 @@
-# 🤖🏸 Rogue Shuttle — prototype
+# 🤖🏸 BOTminton — prototype
 
 Badminton arcade roguelite avec des robots, jouable dans le navigateur (iPhone en priorité).
 Une **run** enchaîne 4 niveaux (Rookie, Pro, Elite, Boss). Chaque niveau se joue en 15 points,
 avec le choix entre 3 cartes tous les 5 points et un modificateur de raquette au quinzième.
 Si le bot atteint 15 avant toi, la run s'arrête. Le boss impose en plus un protocole tiré au sort.
+
+L'écran d'accueil est une affiche pixel réduite à 418 px et ramenée à 64 couleurs (33 Ko). Le texte
+« PRESS START » clignote sans trouer le décor : un second calque, transparent partout ailleurs,
+recouvre la bande avec un court reconstitué, et son apparition alternée masque puis révèle le texte.
 
 ## Jouer
 
@@ -158,7 +162,8 @@ Pas de build ni de dépendances. Scripts classiques chargés par `index.html` :
 - `src/audio.js` — sons synthétiques WebAudio.
 - `src/net.js` — jeu en ligne : salon, élection de l'hôte, instantanés et entrées. Il ignore quel transport le porte.
 - `src/room-rtc.js` — le transport de secours : même surface que la capacité `room`, au-dessus de WebRTC, pour les pages hébergées hors de claude.ai.
-- `src/main.js` — menus, HUD, boucle.
+- `src/title.js` — l'affiche d'accueil et son calque de clignotement, en données embarquées.
+- `src/main.js` — accueil, menus, HUD, boucle.
 
 ```bash
 node tests/physics.test.mjs   # le solveur atterrit où on lui demande

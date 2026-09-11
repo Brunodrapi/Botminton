@@ -43,8 +43,8 @@
   buildCards($('chassisCards'), RS.CHASSIS, 'chassis');
   $('assistToggle').checked = !!settings.assist;
   $('assistToggle').addEventListener('change', (e) => { settings.assist = e.target.checked; saveSettings(); });
-  const panels = ['menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis', 'online', 'lobby'];
-  const LOBBY = ['menu', 'help', 'chassis', 'opponents', 'online', 'lobby'];
+  const panels = ['splash', 'menu', 'help', 'pause', 'end', 'choice', 'malus', 'opponents', 'chassis', 'online', 'lobby'];
+  const LOBBY = ['splash', 'menu', 'help', 'chassis', 'opponents', 'online', 'lobby'];
   function showPanel(name) {
     for (const p of panels) $(p).classList.toggle('hidden', p !== name);
     const playing = !name;
@@ -548,7 +548,19 @@
     showPanel('end');
   }
 
-  showPanel('menu');
+  /* ---------------------------------------------------------------- accueil */
+  // L'affiche, puis le calque qui recouvre « PRESS START » par intermittence.
+  $('splash').querySelector('.art').src = window.TITLE_ART || '';
+  $('splash').querySelector('.band').src = window.TITLE_BAND || '';
+  const leaveSplash = () => {
+    if ($('splash').classList.contains('hidden')) return;
+    sfx.unlock();                              // le premier geste du joueur débloque aussi le son
+    showPanel('menu');
+  };
+  $('splash').addEventListener('pointerdown', leaveSplash);
+  window.addEventListener('keydown', leaveSplash);
+
+  showPanel('splash');
   layout();
   requestAnimationFrame(frame);
 

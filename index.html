@@ -6,11 +6,11 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="Rogue Shuttle">
+<meta name="apple-mobile-web-app-title" content="BOTminton">
 <meta name="theme-color" content="#0b0f1e">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="apple-touch-icon" href="icon.svg">
-<title>Rogue Shuttle</title>
+<title>BOTminton</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap">
 <link rel="stylesheet" href="style.css">
@@ -53,10 +53,21 @@
     <div id="padHint"></div>
   </div>
 
+  <!-- ------------------------------------------------------------- accueil -->
+  <!-- L'affiche, plus un calque qui recouvre le texte « PRESS START » en reconstituant le court.
+       Le calque apparaît et disparaît : le texte clignote sans jamais trouer le décor. -->
+  <div id="splash">
+    <div class="splash-art">
+      <img class="art" alt="BOTminton — badminton de robots">
+      <img class="band" alt="">
+    </div>
+    <p class="splash-hint">Touche l'écran</p>
+  </div>
+
   <!-- ---------------------------------------------------------------- menu -->
   <div id="menu" class="panel">
     <div class="panel-inner">
-      <h1>🤖🏸 ROGUE SHUTTLE</h1>
+      <h1>🤖🏸 BOTminton</h1>
       <p class="tag">BADMINTON · ROBOTS · PREMIER À 15</p>
 
       <label class="toggle"><input type="checkbox" id="assistToggle"> Aide : montrer la zone d'arrivée du volant</label>
@@ -196,6 +207,7 @@
   </div>
 </div>
 
+<script src="src/title.js"></script>
 <script src="src/physics.js"></script>
 <script src="src/game.js"></script>
 <script src="src/sprites.js"></script>
