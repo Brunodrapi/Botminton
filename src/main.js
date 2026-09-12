@@ -104,6 +104,9 @@
   // Sur claude.ai le salon ne relie que des spectateurs connectés au même compte : pour jouer avec
   // qui l'on veut, il faut la page publique, où deux navigateurs se parlent directement.
   const PUBLIC_URL = 'brunodrapi.github.io/Botminton';
+  // Version réellement chargée par ce navigateur. Affichée sous le menu : quand deux joueurs
+  // décrivent le même défaut, c'est ce qui dit s'ils jouent bien tous les deux le même code.
+  const BUILD = (document.querySelector('meta[name="build"]') || {}).content || 'dev';
   const netSettings = { formula: 'duel' };
 
   function pickRow(el, defs, current, onPick, off) {
@@ -604,6 +607,7 @@
     el.querySelector('.band').src = window.TITLE_BAND || '';
   }
   $('menuArt').src = window.MENU_ART || '';
+  $('buildTag').textContent = 'BUILD ' + BUILD;
   const leaveSplash = () => {
     if ($('splash').classList.contains('hidden')) return;
     sfx.unlock();                              // le premier geste du joueur débloque aussi le son
